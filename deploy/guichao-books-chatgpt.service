@@ -1,0 +1,22 @@
+[Unit]
+Description=Guichao Books ChatGPT UI Adapter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=books
+Group=books
+WorkingDirectory=/opt/books
+EnvironmentFile=/etc/books/chatgpt.env
+ExecStart=/usr/bin/node /opt/books/server/chatgpt/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/books
+
+[Install]
+WantedBy=multi-user.target

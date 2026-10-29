@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fcf7f8">
+  <title>共读记录</title>
+  <script>
+    (() => {
+      let theme = 'pink';
+      try {
+        const saved = JSON.parse(localStorage.getItem('readalong-settings')) || {};
+        theme = saved.theme === 'dark' ? 'night' : saved.theme;
+      } catch {}
+      if (!['yellow', 'pink', 'night'].includes(theme)) theme = 'pink';
+      document.documentElement.dataset.theme = theme;
+      if (new URLSearchParams(location.search).get('hosted') === '1' && window.parent !== window) {
+        document.documentElement.dataset.homeHosted = '1';
+      }
+    })();
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    /* 粉色与书架页 library.css 同一套主题色。 */
+    :root {
+      --bg: #fcf7f8; --ink: #4e4548; --muted: #94888c; --faint: #b9adb1;
+      --line: #e9dee2; --soft: #fffafb; --track: #f0e7e9; --accent: #947780;
+      --status-reading: color-mix(in srgb, var(--accent) 48%, var(--bg)); --status-finished: var(--accent); --status-new: var(--track);
+      --top-safe: env(safe-area-inset-top);
+    }
+    :root[data-theme="yellow"] {
+      --bg: #f7f6f1; --ink: #171715; --muted: #8f8e89; --faint: #b2b1ab;
+      --line: rgba(23,23,21,.08); --soft: #fbfaf6; --track: #e6e5df; --accent: #8f8e89;
+      --status-reading: #b9b8b1; --status-finished: #4a4945; --status-new: #deddd6;
+    }
+    :root[data-theme="night"] {
+      --bg: #151514; --ink: #dedbd9; --muted: #999693; --faint: #74716f;
+      --line: rgba(255,255,255,.07); --soft: #1c1c1b; --track: #292826; --accent: #947f8b;
+      --status-reading: #74716f; --status-finished: #d0ccca; --status-new: #302f2d;
+    }
+    :root[data-home-hosted="1"] { --top-safe: 0px; height: 100%; overflow: hidden; }
+    html, body { min-height: 100%; margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    :root[data-home-hosted="1"] body { height: 100%; overflow: hidden; }
+    button { font: inherit; color: inherit; }
+    .page { width: min(100%, 460px); min-height: 100dvh; margin: 0 auto; background: var(--bg); }
+    :root[data-home-hosted="1"] .page { height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+    :root[data-home-hosted="1"] .page::-webkit-scrollbar { display: none; }
+    .topbar { height: calc(68px + var(--top-safe)); padding: calc(7px + var(--top-safe)) 14px 0; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; }
+    .topbar button { width: 44px; height: 44px; padding: 0; border: 0; display: grid; place-items: center; background: transparent; color: var(--muted); cursor: pointer; }
+    .topbar button svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .topbar h1 { margin: 0; text-align: center; font-size: 16px; line-height: 44px; font-weight: 590; letter-spacing: -.02em; }
+    .summary { padding: 42px 24px 34px; text-align: center; }
+    .summary p { margin: 0; color: var(--muted); font-size: 12px; }
+    .summary strong { display: block; margin-top: 8px; font-size: 29px; line-height: 1.2; font-weight: 590; letter-spacing: -.045em; }
+    .summary small { display: block; margin-top: 9px; color: var(--faint); font-size: 11px; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 18px 26px; }
+    .pair article { min-height: 96px; padding: 17px 16px; border-radius: 18px; background: var(--soft); }
+    .pair span { display: block; color: var(--muted); font-size: 11px; }
+    .pair strong { display: block; margin-top: 18px; font-size: 22px; font-weight: 540; letter-spacing: -.03em; }
+    .group { border-top: 1px solid var(--line); }
+    .group-title { padding: 27px 22px 13px; color: var(--muted); font-size: 11px; }
+    .status { padding: 4px 22px 27px; }
+    .status-track { height: 5px; display: flex; gap: 3px; overflow: hidden; border-radius: 999px; }
+    .status-track i { display: block; height: 100%; min-width: 3px; border-radius: inherit; }
+    .status-track .reading { background: var(--status-reading); }
+    .status-track .finished { background: var(--status-finished); }
+    .status-track .new { background: var(--status-new); }
+    .status-labels { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 13px; }
+    .status-labels span { color: var(--muted); font-size: 11px; }
+    .status-labels span:nth-child(2) { text-align: center; }
+    .status-labels span:last-child { text-align: right; }
+    .status-labels b { margin-right: 3px; color: var(--ink); font-size: 14px; font-weight: 560; }
+    .row { min-height: 62px; margin: 0 22px; display: grid; grid-template-columns: 1fr auto; align-items: center; border-top: 1px solid var(--line); }
+    .row span { font-size: 14px; font-weight: 450; }
+    .row strong { font-size: 14px; font-weight: 560; }
+    .activity { padding: 5px 22px 32px; }
+    .activity-row { min-height: 54px; display: grid; grid-template-columns: 76px 1fr 36px; align-items: center; gap: 12px; border-top: 1px solid var(--line); }
+    .activity-row:first-child { border-top: 0; }
+    .activity-row span { color: var(--muted); font-size: 12px; }
+    .activity-row strong { text-align: right; font-size: 14px; font-weight: 560; }
+    .mini-track { height: 3px; overflow: hidden; border-radius: 999px; background: var(--track); }
+    .mini-track i { display: block; width: var(--fill); height: 100%; border-radius: inherit; background: var(--accent); }
+    .footnote { padding: 22px 22px calc(32px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; text-align: center; }
+    .error { min-height: 280px; padding: 80px 32px; display: grid; place-items: center; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.7; }
+    .retry { margin-top: 15px; padding: 7px 16px; border: 1px solid var(--line); border-radius: 999px; background: transparent; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar"><button id="back" type="button" aria-label="返回书架"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><h1>共读记录</h1><i aria-hidden="true"></i></header>
+    <div id="content" aria-live="polite"><div class="error">正在整理书房记录…</div></div>
+  </main>
+  <script>
+    const API = '/reading/api';
+    const HOME_HOSTED = document.documentElement.dataset.homeHosted === '1';
+    const THEMES = {
+      yellow: { bg: '#f7f6f1', ink: '#171715' },
+      pink: { bg: '#fcf7f8', ink: '#4e4548' },
+      night: { bg: '#151514', ink: '#dedbd9' },
+    };
+    const theme = THEMES[document.documentElement.dataset.theme] || THEMES.pink;
+    document.querySelector('meta[name="theme-color"]').content = theme.bg;
+    if (HOME_HOSTED) {
+      window.parent.postMessage({ type: 'guichao-books:theme', bg: theme.bg, ink: theme.ink }, location.origin);
+      window.parent.postMessage({ type: 'guichao-books:view', view: 'stats' }, location.origin);
+    }
+    window.addEventListener('message', (event) => {
+      if (!HOME_HOSTED || event.origin !== location.origin || event.source !== window.parent || event.data?.type !== 'guichao-books:host-ready') return;
+      window.parent.postMessage({ type: 'guichao-books:theme', bg: theme.bg, ink: theme.ink }, location.origin);
+      window.parent.postMessage({ type: 'guichao-books:view', view: 'stats' }, location.origin);
+    });
+
+    document.getElementById('back').addEventListener('click', () => {
+      if (new URLSearchParams(location.search).get('library') === '1' && window.parent !== window) {
+        window.parent.postMessage({ type: 'guichao-books:stats-close' }, location.origin);
+        return;
+      }
+      location.assign(HOME_HOSTED ? '/reading/?hosted=1' : '/reading/');
+    });
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    }
+
+    async function getJson(path) {
+      const response = await fetch(API + path, { credentials: 'same-origin', cache: 'no-store' });
+      if (response.status === 401) {
+        try { window.top.location.assign('/login.html'); } catch { location.assign('/login.html'); }
+        throw new Error('需要重新登录');
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function duration(ms) {
+      const minutes = Math.max(0, Math.round((Number(ms) || 0) / 60000));
+      if (minutes < 60) return `${minutes} 分钟`;
+      return `${Math.floor(minutes / 60)} 小时 ${String(minutes % 60).padStart(2, '0')} 分`;
+    }
+
+    function rootNote(annotation) {
+      const direct = String(annotation?.note || annotation?.comment || '').trim();
+      if (direct) return direct;
+      const first = Array.isArray(annotation?.comments) ? annotation.comments[0] : null;
+      return first && first.author === annotation.createdBy ? String(first.text || '').trim() : '';
+    }
+
+    function replyCount(annotation) {
+      const comments = Array.isArray(annotation?.comments) ? annotation.comments : [];
+      const firstIsRoot = !String(annotation?.note || annotation?.comment || '').trim()
+        && comments[0] && comments[0].author === annotation.createdBy;
+      return Math.max(0, comments.length - (firstIsRoot ? 1 : 0));
+    }
+
+    function render(books, annotations) {
+      const finished = books.filter((book) => Number(book.progressPct) >= 100).length;
+      const reading = books.filter((book) => Number(book.progressPct) > 0 && Number(book.progressPct) < 100).length;
+      const unopened = Math.max(0, books.length - finished - reading);
+      const togetherFinished = books.filter((book) => Number(book.readers?.human?.progressPct) >= 100 && Number(book.readers?.ai?.progressPct) >= 100).length;
+      const aiRead = books.filter((book) => Number(book.readers?.ai?.progressPct) > 0).length;
+      const totalReadMs = books.reduce((sum, book) => sum + (Number(book.totalReadMs) || 0), 0);
+      const highlights = annotations.length;
+      const notes = annotations.filter((annotation) => rootNote(annotation)).length;
+      const replies = annotations.reduce((sum, annotation) => sum + replyCount(annotation), 0);
+      const maxActivity = Math.max(1, highlights, notes, replies);
+      const total = Math.max(1, books.length);
+      const statusWidth = (value) => `${Math.max(value ? 4 : 0, (value / total) * 100)}%`;
+      const activityWidth = (value) => `${(value / maxActivity) * 100}%`;
+
+      document.getElementById('content').innerHTML = `
+        <section class="summary">
+          <p>书房里有</p>
+          <strong>${books.length} 本书</strong>
+          <small>共同读完 ${togetherFinished} 本</small>
+        </section>
+        <section class="pair" aria-label="双方阅读记录">
+          <article><span>读者累计阅读</span><strong>${esc(duration(totalReadMs))}</strong></article>
+          <article><span>共读者读过</span><strong>${aiRead} 本</strong></article>
+        </section>
+        <section class="group">
+          <div class="group-title">书房</div>
+          <div class="status">
+            <div class="status-track" aria-hidden="true"><i class="reading" style="width:${statusWidth(reading)}"></i><i class="finished" style="width:${statusWidth(finished)}"></i><i class="new" style="width:${statusWidth(unopened)}"></i></div>
+            <div class="status-labels"><span><b>${reading}</b>在读</span><span><b>${finished}</b>读完</span><span><b>${unopened}</b>未开始</span></div>
+          </div>
+          <div class="row"><span>共同读完</span><strong>${togetherFinished} 本</strong></div>
+        </section>
+        <section class="group">
+          <div class="group-title">页边</div>
+          <div class="activity">
+            <div class="activity-row"><span>划线</span><div class="mini-track"><i style="--fill:${activityWidth(highlights)}"></i></div><strong>${highlights}</strong></div>
+            <div class="activity-row"><span>批注</span><div class="mini-track"><i style="--fill:${activityWidth(notes)}"></i></div><strong>${notes}</strong></div>
+            <div class="activity-row"><span>共读回复</span><div class="mini-track"><i style="--fill:${activityWidth(replies)}"></i></div><strong>${replies}</strong></div>
+          </div>
+        </section>
+        <p class="footnote">全部时间</p>`;
+    }
+
+    async function load() {
+      try {
+        const { books = [] } = await getJson('/books');
+        const annotationSets = await Promise.all(books.map(async (book) => {
+          try { return (await getJson('/annotations/' + encodeURIComponent(book.bookId))).annotations || []; }
+          catch { return []; }
+        }));
+        render(books, annotationSets.flat());
+      } catch (error) {
+        document.getElementById('content').innerHTML = `<div class="error"><div>共读记录暂时没有载入。<br>${esc(error.message)}<br><button class="retry" type="button">重试</button></div></div>`;
+        document.querySelector('.retry')?.addEventListener('click', load);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

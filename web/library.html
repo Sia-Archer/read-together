@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#fcf7f8">
+<title>BOOKS · 书房</title>
+<script>
+if (new URLSearchParams(location.search).get('hosted') === '1' && window.parent !== window) document.documentElement.dataset.homeHosted = '1';
+try {
+  const saved = JSON.parse(localStorage.getItem('readalong-settings') || '{}');
+  const theme = saved.theme === 'dark' ? 'night' : saved.theme;
+  document.documentElement.dataset.theme = ['yellow', 'pink', 'night'].includes(theme) ? theme : 'pink';
+} catch { document.documentElement.dataset.theme = 'pink'; }
+</script>
+<link rel="stylesheet" href="library.css?v=20261029-1">
+</head>
+<body>
+<main class="library">
+  <header class="topbar">
+    <button class="icon-button" id="back-home" aria-label="返回小家"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 12H4m7-7-7 7 7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="heading"><h1>BOOKS</h1></div>
+    <div class="tools">
+      <button class="icon-button add-toggle" id="add-toggle" popovertarget="add-menu" aria-label="添加" aria-expanded="false"><i class="icon plus" aria-hidden="true"></i></button>
+    </div>
+  </header>
+  <div class="books-head">
+    <div class="books-title"><h2>书房</h2><span id="total-count">6 本书</span></div>
+    <div class="tools">
+      <button class="icon-button" id="search-toggle" aria-label="搜索书籍" aria-expanded="false"><i class="icon search" aria-hidden="true"></i></button>
+      <button class="icon-button" id="stats-toggle" aria-label="查看共读记录"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19V11M12 19V5M19 19v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+  </div>
+  <div class="search-row" id="search-row" hidden><i class="icon search" aria-hidden="true"></i><input id="search-input" type="search" placeholder="书名或作者" aria-label="书名或作者" autocomplete="off"><button class="icon-button" id="search-close" aria-label="收起搜索"><i class="icon close" aria-hidden="true"></i></button></div>
+  <nav class="filters" aria-label="书库筛选">
+    <div class="segments" role="group" aria-label="阅读状态"><button data-status="reading" class="selected" aria-pressed="true">在读</button><button data-status="unread" aria-pressed="false">未读</button><button data-status="finished" aria-pressed="false">已读</button></div>
+    <button class="group-filter" id="group-toggle" popovertarget="group-menu" aria-expanded="false" aria-label="管理书库"><span id="group-label">管理</span><i class="icon caret" aria-hidden="true"></i></button>
+  </nav>
+  <div class="section-label"><span id="view-label">正在阅读</span><span id="view-count">6 本</span></div>
+  <section class="reading-view" id="reading-view" aria-label="在读书架"><iframe id="original-reader" title="Books 书架与阅读器"></iframe></section>
+  <section class="book-grid" id="book-grid" aria-label="书籍"></section>
+  <section class="empty-state" id="empty-state" hidden><i class="icon book" aria-hidden="true"></i><p id="empty-text">还没有书籍</p></section>
+</main>
+
+<section class="book-page" id="book-page" aria-label="书籍详情" hidden>
+  <header class="book-page-top"><button class="icon-button" id="book-page-back" aria-label="返回书库"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 12H4m7-7-7 7 7 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>BOOKS</h1><button class="icon-button book-delete" id="book-page-delete" aria-label="将这本书移到回收站" title="移到回收站"><i class="icon trash" aria-hidden="true"></i></button></header>
+  <div class="book-page-scroll"><div id="book-detail"></div></div>
+</section>
+
+<div class="popover import-panel" id="add-menu" popover>
+  <form id="import-form">
+    <header class="import-head"><button type="button" data-close-popover>取消</button><h2>添加书籍</h2><button type="submit" id="import-save" disabled>完成</button></header>
+    <label class="file-choice"><i class="icon upload" aria-hidden="true"></i><span id="file-label">选择 EPUB 或 TXT</span><input id="book-file" type="file" accept=".epub,.txt"></label>
+    <label class="field-label" for="import-name">书名</label><input id="import-name" class="text-input" autocomplete="off" placeholder="选择文件后自动识别">
+    <label class="field-label import-field" for="import-author">作者</label><input id="import-author" class="text-input" autocomplete="off" placeholder="自动识别，可补充修改">
+    <span class="field-label import-field" id="import-group-label">放进分组</span>
+    <input type="hidden" id="import-group" value="">
+    <button type="button" class="import-group-toggle" id="import-group-toggle" aria-labelledby="import-group-label import-group-current" aria-expanded="false" aria-controls="import-group-options"><span id="import-group-current">暂不分组</span><i class="icon caret" aria-hidden="true"></i></button>
+    <div class="import-group-options" id="import-group-options" hidden></div>
+    <p class="subtle import-note" id="import-note" role="status">选择文件后自动识别，可修改书名和作者。</p>
+  </form>
+</div>
+<div class="popover group-menu" id="group-menu" popover></div>
+
+<dialog id="group-dialog" aria-labelledby="group-title">
+  <form id="group-form">
+    <header class="dialog-head"><h2 id="group-title">新建分组</h2><button type="button" class="icon-button" data-close aria-label="关闭新建分组"><i class="icon close" aria-hidden="true"></i></button></header>
+    <label class="field-label" for="group-name">分组名称</label><input class="text-input" id="group-name" placeholder="例如：睡前读" maxlength="24" required autocomplete="off">
+    <div class="field-label pick-label">放进这些书 <span>可多选</span></div><div class="pick-list" id="group-books"></div>
+    <p class="form-error" id="group-error" aria-live="polite"></p>
+    <footer class="dialog-actions"><button type="button" class="text-button" data-close>取消</button><button type="submit" class="soft-button">建好啦</button></footer>
+  </form>
+</dialog>
+<dialog id="trash-dialog" aria-labelledby="trash-title"><header class="dialog-head"><h2 id="trash-title">回收站</h2><button class="icon-button" data-close aria-label="关闭回收站"><i class="icon close" aria-hidden="true"></i></button></header><p class="subtle">移到这里的书可以恢复。</p><div id="trash-list" class="manage-list"></div></dialog>
+<div class="toast" id="toast" role="status"></div>
+<script src="library.js?v=20261027-2"></script>
+</body>
+</html>

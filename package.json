@@ -1,0 +1,23 @@
+{
+  "name": "read-together",
+  "version": "1.0.0",
+  "description": "一间给人和 AI 一起读书的共读书房",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "mcp:start": "node server/mcp/server.js",
+    "chatgpt:start": "node server/chatgpt/server.js",
+    "import": "node import-book.js",
+    "check": "node --check server.js && node --check server/mcp/client.js && node --check server/mcp/server.js && node --check server/chatgpt/widget.js && node --check server/chatgpt/server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "adm-zip": "^0.6.1",
+    "fast-xml-parser": "^5.9.3",
+    "html-to-text": "^10.0.0"
+  }
+}

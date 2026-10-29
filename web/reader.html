@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#fcf7f8">
+<title>共读书架</title>
+<script>
+if (location.pathname === '/reading/' && new URLSearchParams(location.search).get('library') !== '1') {
+  location.replace('/reading/library.html' + location.search + location.hash);
+}
+if (new URLSearchParams(location.search).get('hosted') === '1' && window.parent !== window) {
+  document.documentElement.dataset.homeHosted = '1';
+}
+if (new URLSearchParams(location.search).get('library') === '1') document.documentElement.dataset.library = '1';
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #fcf7f8; --text: #4e4548; --card: #fffafb; --panel: #fffafb;
+  --muted: #94888c; --faint: #b9adb1; --quote: #7b6e74;
+  --border: #e9dee2; --border-soft: #f0e7e9; --cover-ph: #ded6da;
+  --accent: #947780; --accent-text: #fff;
+  --human: #e9609b; --human-deep: #c2578d; --ai: #4a71b5;
+  --toast-bg: rgba(40,36,30,.9); --toast-text: #fff;
+  --shadow: rgba(0,0,0,.08); --shadow-deep: rgba(0,0,0,.18); --mask: rgba(0,0,0,.45);
+  --reading-top-safe: env(safe-area-inset-top);
+}
+:root[data-home-hosted="1"] { width: 100%; height: 100%; min-height: 0; overflow: hidden; --reading-top-safe: 0px; overscroll-behavior: none; }
+:root[data-home-hosted="1"] body { width: 100%; height: 100%; min-height: 0; overflow: hidden; overscroll-behavior: none; }
+:root[data-theme="yellow"] {
+  --bg: #f7f6f1; --text: #171715; --card: #fbfaf6; --panel: #f3f2ed;
+  --muted: #8f8e89; --faint: #b2b1ab; --quote: #5f5e5a;
+  --border: #d9d8d1; --border-soft: #e9e8e2; --cover-ph: #e4e2db;
+  --accent: #171715; --accent-text: #f7f6f1;
+  --toast-bg: rgba(23,23,21,.92); --toast-text: #f7f6f1;
+  --shadow: rgba(35,33,28,.07); --shadow-deep: rgba(35,33,28,.15); --mask: rgba(20,20,18,.42);
+}
+:root[data-theme="night"] {
+  --bg: #151514; --text: #dedbd9; --card: #1c1c1b; --panel: #191918;
+  --muted: #999693; --faint: #74716f; --quote: #bbb7b4;
+  --border: #353432; --border-soft: #292826; --cover-ph: #302f2d;
+  --accent: #a58f9c; --accent-text: #fff;
+  --human: #e9609b; --human-deep: #d478a6; --ai: #6f92cc;
+  --toast-bg: rgba(232,232,238,.92); --toast-text: #202023;
+  --shadow: rgba(0,0,0,.35); --shadow-deep: rgba(0,0,0,.5); --mask: rgba(0,0,0,.55);
+}
+html, body { width: 100%; min-height: 100%; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--text); -webkit-user-select: none; user-select: none; }
+body { overscroll-behavior-y: none; }
+body.reader-open { height: 100dvh; overflow: hidden; }
+button, input { font: inherit; color: inherit; }
+
+/* ── 书架 ── */
+.shelf { position: relative; width: min(100%, 460px); min-height: 100dvh; margin: 0 auto; padding-bottom: calc(38px + env(safe-area-inset-bottom)); overflow: hidden; background: var(--bg); }
+:root[data-home-hosted="1"] .shelf { height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; scrollbar-width: none; }
+:root[data-home-hosted="1"] .shelf::-webkit-scrollbar { display: none; }
+:root[data-theme="pink"] .shelf { background: var(--bg); }
+:root[data-theme="night"] .shelf { background: var(--bg); }
+body.reader-open .shelf { visibility: hidden; pointer-events: none; }
+.shelf.loading-hidden { visibility: hidden; }
+.shelf-topbar { height: calc(62px + var(--reading-top-safe)); padding: calc(8px + var(--reading-top-safe)) 22px 6px; display: flex; align-items: center; justify-content: space-between; }
+.shelf-topbar h1 { margin: 0; font-size: 25px; line-height: 1; letter-spacing: -.04em; font-weight: 650; }
+.shelf-topbar small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; letter-spacing: .02em; }
+.stats-btn { width: 44px; height: 44px; margin-right: -8px; padding: 0; border: 0; display: grid; place-items: center; background: transparent; color: var(--muted); }
+.stats-btn svg { width: 20px; height: 20px; }
+.stats-btn:active { transform: scale(.94); color: var(--text); }
+.shelf-stage { position: relative; height: 357px; perspective: 1100px; perspective-origin: 50% 42%; touch-action: pan-y; cursor: grab; }
+.shelf-stage.dragging { cursor: grabbing; }
+.shelf-stage::after { content: ""; position: absolute; z-index: 0; left: 50%; bottom: 32px; width: 210px; height: 22px; border-radius: 50%; background: rgba(50,52,52,.12); filter: blur(16px); transform: translateX(-50%); opacity: .56; pointer-events: none; }
+.shelf-book { position: absolute; z-index: 1; top: 53px; left: 50%; width: 166px; height: 246px; padding: 0; border: 0; background: transparent; transform-origin: center; will-change: transform, opacity; transition: transform .52s cubic-bezier(.22,.72,.16,1), opacity .34s ease, filter .34s ease; }
+.dragging .shelf-book { transition: none; }
+.shelf-book[aria-hidden="true"] { pointer-events: none; }
+.book-shell { position: absolute; inset: 0; border-radius: 5px 11px 11px 5px; background: #e9e9e6; box-shadow: 0 22px 62px rgba(74,61,69,.10), -8px 3px 14px rgba(41,43,43,.06); transform-style: preserve-3d; }
+.book-shell::before { content: ""; position: absolute; z-index: -1; top: 6px; right: -7px; bottom: 6px; width: 12px; border-radius: 0 6px 6px 0; background: repeating-linear-gradient(90deg, #deded9 0 1px, #f8f8f4 1px 3px); transform: translateZ(-5px); }
+.book-shell::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 11px; border-radius: 5px 0 0 5px; background: linear-gradient(90deg, rgba(23,24,24,.24), rgba(255,255,255,.12) 52%, transparent); mix-blend-mode: multiply; opacity: .48; pointer-events: none; }
+.book-shell img { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: inherit; pointer-events: none; }
+.book-placeholder { display: grid; place-items: center; height: 100%; padding: 18px; color: var(--quote); font-size: 18px; line-height: 1.6; }
+.shelf-book:not(.is-active) .book-shell { box-shadow: 0 15px 38px rgba(48,50,50,.09); }
+.page-dots { height: 16px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.page-dot { width: 5px; height: 5px; padding: 0; border: 0; border-radius: 999px; background: #c2c3c1; transition: width .28s ease, background .28s ease; }
+.page-dot.on { width: 18px; background: #676b69; }
+.book-info { min-height: 118px; padding: 8px 27px 20px; text-align: center; }
+.book-info h2 { margin: 0; font-size: 21px; line-height: 1.24; letter-spacing: -.035em; font-weight: 630; }
+.book-info .author { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+.reading-panel { margin: 0 18px; padding: 18px 18px 17px; border: 1px solid rgba(255,255,255,.82); border-radius: 22px; background: rgba(253,251,252,.72); box-shadow: 0 14px 42px rgba(54,56,56,.07), inset 0 0 0 .5px rgba(52,54,54,.05); }
+:root[data-theme="night"] .reading-panel { background: rgba(255,255,255,.035); border-color: rgba(255,255,255,.07); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.025); }
+:root[data-theme="night"] .note-card { background: rgba(255,255,255,.025); }
+.progress-line { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.progress-line strong { font-size: 14px; font-weight: 600; }
+.progress-line span { color: var(--muted); font-size: 12px; }
+.track { height: 4px; margin: 13px 0 10px; overflow: hidden; border-radius: 4px; background: rgba(65,68,67,.09); }
+.track i { display: block; height: 100%; min-width: 5px; border-radius: inherit; background: var(--accent); transition: width .44s cubic-bezier(.22,.72,.16,1); }
+.reader-progresses { display: grid; gap: 3px; margin: 0 0 13px; text-align: left; }
+.reader-progress { overflow: hidden; color: var(--muted); font-size: 11px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.panel-bottom { display: flex; align-items: center; justify-content: space-between; }
+.read-time { color: var(--muted); font-size: 12px; }
+.continue:disabled { opacity: .42; }
+.continue { min-width: 106px; height: 39px; padding: 0 18px; border: 0; border-radius: 999px; color: #fff; background: var(--accent); box-shadow: 0 8px 18px rgba(86,68,79,.14); font-size: 13px; font-weight: 560; }
+.continue:active { transform: scale(.98); }
+.notes { padding: 28px 22px 0; }
+.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
+.section-head h3 { margin: 0; font-size: 17px; letter-spacing: -.025em; }
+.section-head button { border: 0; background: transparent; color: var(--muted); padding: 5px 0 5px 12px; font-size: 12px; }
+.note-card { min-height: 103px; padding: 17px 17px 15px; border-top: 1px solid rgba(89,75,84,.09); border-bottom: 1px solid rgba(89,75,84,.09); background: rgba(255,255,255,.24); }
+.home-quote { margin: 0; padding-left: 12px; border-left: 2px solid #a7aaa8; font-size: 14px; line-height: 1.72; letter-spacing: .005em; }
+.note-meta { margin: 11px 0 0 14px; display: flex; gap: 9px; color: var(--muted); font-size: 11px; }
+.empty-note { min-height: 92px; display: grid; place-items: center; border-top: 1px solid rgba(89,75,84,.09); color: var(--faint); font-size: 13px; }
+.shelf-empty { padding: 110px 32px 0; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.8; }
+
+@media (max-height: 720px) { .shelf-stage { height: 317px; } .shelf-book { top: 39px; width: 146px; height: 216px; } .shelf-stage::after { bottom: 41px; } .book-info { min-height: 100px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; } }
+
+/* ── 覆盖层（书籍面板） ── */
+.overlay { position: fixed; inset: 0; background: var(--mask); display: none; align-items: flex-end; z-index: 20; }
+.overlay.open { display: flex; }
+.panel { background: var(--panel); width: 100%; max-height: 82vh; border-radius: 16px 16px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; }
+.panel-head { display: flex; gap: 14px; margin-bottom: 12px; }
+.panel-head img { width: 72px; height: 100px; object-fit: cover; border-radius: 6px; background: var(--cover-ph); }
+.bk-meta { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.panel-btns { display: flex; gap: 10px; margin-bottom: 12px; }
+.panel-btns button { flex: 1; padding: 10px 0; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--text); font-size: 15px; font-family: inherit; }
+.panel-btns button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.tabs { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.tabs span.on { color: var(--text); font-weight: 600; }
+.tabs .sort { margin-left: auto; }
+.panel-list { overflow-y: auto; flex: 1; }
+.anno-item { background: var(--card); border-radius: 9px; padding: 10px 12px; margin-bottom: 9px; }
+.anno-quote { font-size: 13px; color: var(--quote); border-left: 3px solid var(--border); padding-left: 8px; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.anno-sub { font-size: 12px; color: var(--faint); display: flex; gap: 10px; }
+.anno-root-empty { padding: 3px 0 1px; color: var(--faint); font-size: 11px; }
+.mark-item { display: block; width: 100%; padding: 13px 4px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: inherit; text-align: left; font-family: inherit; }
+.mark-excerpt { font-size: 14px; line-height: 1.65; }
+.mark-sub { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.who-human { color: var(--human-deep); } .who-ai { color: var(--ai); }
+.toc-item { display: flex; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid var(--border-soft); font-size: 14px; }
+.toc-item.cur span:first-child { color: var(--accent); font-weight: 700; }
+.toc-chars { color: var(--faint); font-size: 12px; }
+.empty-tip { text-align: center; color: var(--faint); font-size: 13px; padding: 30px 0; }
+
+/* ── 阅读器 ── */
+.reader { position: fixed; inset: 0; width: 100%; height: 100dvh; min-height: -webkit-fill-available; overflow: hidden; background: var(--bg); display: flex; flex-direction: column; z-index: 30; overscroll-behavior: none; visibility: hidden; opacity: 0; pointer-events: none; }
+.reader.open { visibility: visible; opacity: 1; pointer-events: auto; }
+.reader-top { position: relative; flex: 0 0 auto; min-height: calc(76px + var(--reading-top-safe)); display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; padding: var(--reading-top-safe) 15px 0; font-size: 14px; color: var(--muted); }
+.reader-page-bookmark { position: absolute; top: var(--reading-top-safe); right: 20px; width: 14px; height: 24px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 75%, 0 100%); pointer-events: none; }
+.reader-page-bookmark[hidden] { display: none; }
+.r-back { width: 44px; height: 44px; padding: 0; border: 0; display: grid; place-items: center; background: transparent; color: inherit; cursor: pointer; }
+.r-back svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.r-title { height: 44px; display: flex; align-items: center; justify-content: center; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.reader-viewport { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 8px 22px; position: relative; touch-action: pan-y; }
+.reader-flow, .reader-flow * { -webkit-user-select: text; user-select: text; }
+:root.paint-select .reader-flow, :root.paint-select .reader-flow * { -webkit-touch-callout: none; }
+::highlight(books-paint) { background-color: color-mix(in srgb, var(--human) 30%, transparent); }
+.reader-flow { height: 100%; column-gap: 44px; column-fill: auto; font-size: 17px; line-height: 1.9; text-align: justify; transition: transform .26s cubic-bezier(.22,.72,.16,1); will-change: transform; }
+.reader-flow.no-transition { transition: none; }
+.reader-flow p { margin-bottom: 0.9em; text-indent: 2em; }
+.reader-flow p.is-title { text-indent: 0; font-weight: 700; font-size: 1.12em; }
+.reader-foot { text-align: center; font-size: 12px; color: var(--faint); padding: 6px 0 max(10px, env(safe-area-inset-bottom)); }
+.seg { border-radius: 2px; }
+.hl-human { box-shadow: inset 0 -2px rgba(233, 96, 155, .55); }
+.hl-ai { box-shadow: inset 0 -2px rgba(74, 113, 181, .5); }
+.hl-human.has-note { box-shadow: none; background: rgba(233, 96, 155, .16); }
+.hl-ai.has-note { box-shadow: none; background: rgba(74, 113, 181, .14); }
+:root[data-theme="night"] .hl-human.has-note { background: rgba(233, 96, 155, .26); }
+:root[data-theme="night"] .hl-ai.has-note { background: rgba(111, 146, 204, .26); }
+.hl-preview { background: rgba(240, 180, 41, .3); }
+.seg.flash { background: rgba(240, 180, 41, .45); }
+.bub { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 2px; vertical-align: super; }
+.bub.by-human { background: var(--human); } .bub.by-ai { background: var(--ai); }
+
+/* ── 划线后的轻操作条 ── */
+.selection-tools { position: fixed; left: var(--books-selection-left, 50%); top: var(--books-selection-top, 16px); max-width: calc(100% - 16px); z-index: 9; display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid rgba(255,255,255,.82); border-radius: 999px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 14px 34px var(--shadow-deep); backdrop-filter: blur(20px) saturate(1.08); -webkit-backdrop-filter: blur(20px) saturate(1.08); opacity: 0; pointer-events: none; transform: translate(-50%, 12px) scale(.96); transition: opacity .16s ease, transform .2s cubic-bezier(.22,.72,.16,1); }
+.selection-tools.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0) scale(1); }
+.selection-tools button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-family: inherit; font-size: 13px; white-space: nowrap; }
+.selection-tools .primary { background: var(--accent); color: var(--accent-text); }
+:root[data-theme="night"] .selection-tools { border-color: rgba(255,255,255,.07); background: rgba(28,28,27,.96); }
+
+/* ── 阅读中心菜单：点页面中间后逐层展开 ── */
+.rbar { position: absolute; right: 18px; bottom: calc(44px + env(safe-area-inset-bottom)); width: min(268px, calc(100% - 48px)); display: grid; gap: 6px; opacity: 0; pointer-events: none; transform: translateY(18px) scale(.97); transform-origin: 78% 100%; transition: opacity .16s ease, transform .24s cubic-bezier(.22,.72,.16,1); z-index: 6; }
+.reader.bar-open .rbar { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+.rbar > button { min-height: 46px; padding: 0 16px; border: 0; border-radius: 999px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: color-mix(in srgb, var(--border-soft) 94%, var(--text)); color: var(--text); box-shadow: 0 6px 18px var(--shadow); backdrop-filter: blur(28px) saturate(1.12); -webkit-backdrop-filter: blur(28px) saturate(1.12); font-family: inherit; font-size: 14px; font-weight: 500; text-align: left; opacity: 0; transform: translateY(10px); transition: opacity .16s ease, transform .26s cubic-bezier(.22,.72,.16,1), background .12s ease; }
+.reader.bar-open .rbar > button { opacity: 1; transform: none; }
+.reader.bar-open .rbar > button:nth-child(2) { transition-delay: .025s; }
+.reader.bar-open .rbar > button:nth-child(3) { transition-delay: .05s; }
+.rbar > button:active { transform: scale(.985); background: var(--border-soft); }
+.rbar > button.reader-menu-primary { position: relative; isolation: isolate; overflow: hidden; }
+.reader-menu-primary::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--reading-progress, 0%); background: color-mix(in srgb, var(--text) 14%, transparent); z-index: -1; pointer-events: none; }
+.reader-menu-label { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.reader-menu-progress { font-size: 13px; font-weight: 500; opacity: .78; }
+.reader-menu-icon { width: 21px; height: 21px; flex: 0 0 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.reader-menu-meta { color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.reader-quick-actions { display: flex; justify-content: flex-end; padding-top: 2px; opacity: 0; transform: translateY(10px) scale(.9); transform-origin: 90% 50%; transition: opacity .16s ease, transform .28s cubic-bezier(.2,.88,.22,1.2); }
+.reader.bar-open .reader-quick-actions { opacity: 1; transform: none; transition-delay: .075s; }
+.r-mark { width: 46px; height: 46px; padding: 0; border: 1px solid rgba(255,255,255,.86); border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--border-soft) 94%, var(--text)); box-shadow: 0 6px 18px var(--shadow); backdrop-filter: blur(28px) saturate(1.12); -webkit-backdrop-filter: blur(28px) saturate(1.12); transition: transform .16s cubic-bezier(.2,.88,.22,1.2), background .18s ease, box-shadow .18s ease; }
+.r-mark:active { transform: scale(.89); }
+.r-mark.on { background: var(--accent); box-shadow: 0 6px 18px var(--shadow); }
+.r-mark-icon { grid-area: 1 / 1; width: 24px; height: 24px; transition: opacity .15s ease, transform .22s cubic-bezier(.2,.88,.22,1.2); }
+.r-mark-icon.on { opacity: 0; transform: scale(.72); }
+.r-mark.on .r-mark-icon.off { opacity: 0; transform: scale(.72); }
+.r-mark.on .r-mark-icon.on { opacity: 1; transform: scale(1); }
+.r-mark.pulse { animation: bookmark-pop .34s cubic-bezier(.2,.88,.22,1.25); }
+@keyframes bookmark-pop { 0% { transform: scale(1); } 42% { transform: scale(.82); } 72% { transform: scale(1.08); } 100% { transform: scale(1); } }
+:root[data-theme="night"] .r-mark.on { background: rgba(148,128,140,.90); }
+@media (min-width: 900px) {
+  .reader-top, .reader-viewport, .reader-foot { width: min(860px, 100%); margin-left: auto; margin-right: auto; }
+  .rbar { right: max(28px, calc((100vw - 860px) / 2)); }
+}
+
+/* ── 阅读设置：主题、字面与翻页 ── */
+#sheet-set { max-height: 72vh; padding: 8px 20px calc(18px + env(safe-area-inset-bottom)); }
+.settings-grabber { width: 36px; height: 4px; margin: 0 auto 3px; border-radius: 999px; background: var(--border); }
+.settings-head { min-height: 48px; display: flex; align-items: center; justify-content: space-between; }
+.settings-head h2 { font-size: 17px; line-height: 1; letter-spacing: -.025em; font-weight: 650; }
+.settings-close { width: 42px; height: 42px; margin-right: -10px; border: 0; display: grid; place-items: center; background: transparent; color: var(--muted); }
+.settings-close svg { width: 19px; height: 19px; }
+.settings-section { padding: 12px 0 13px; border-top: 1px solid var(--border-soft); }
+.settings-section:first-of-type { border-top: 0; }
+.settings-label { margin-bottom: 7px; color: var(--muted); font-size: 11px; letter-spacing: .02em; }
+.theme-grid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); }
+.theme-grid::after { content: ''; position: absolute; left: 0; bottom: 0; width: 33.333333%; height: 1px; background: linear-gradient(var(--accent), var(--accent)) center / 42px 1px no-repeat; transform: translateX(var(--theme-position, 0%)); transition: transform .24s cubic-bezier(.22,.72,.16,1); pointer-events: none; }
+.theme-choice { position: relative; min-height: 42px; padding: 0 0 4px; border: 0; display: flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); font-family: inherit; font-size: 12px; }
+.theme-choice.on { color: var(--text); font-weight: 600; }
+.theme-dots { display: flex; }
+.theme-dots i { display: none; }
+.theme-dots i:first-child { width: 13px; height: 13px; display: block; border: 1px solid rgba(74,63,48,.09); border-radius: 50%; }
+.theme-yellow i:first-child { border-color: #d9d8d1; background: #f7f6f1; }
+.theme-pink i:first-child { background: #947780; }
+.theme-night i:first-child { background: #3f3a3e; }
+.type-preview { min-height: 46px; margin-bottom: 2px; display: grid; place-items: center; color: var(--text); font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif; text-align: center; transition: font-size .12s ease, line-height .12s ease; }
+.step-row { min-height: 43px; display: grid; grid-template-columns: 1fr auto; align-items: center; }
+.step-label { color: var(--muted); font-size: 12px; }
+.stepper { display: grid; grid-template-columns: 44px 44px 44px; align-items: center; }
+.stepper button { width: 44px; height: 42px; padding: 0; border: 0; display: grid; place-items: center; background: transparent; color: var(--text); }
+.stepper button svg { width: 18px; height: 18px; }
+.stepper output { color: var(--muted); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
+.page-mode-section { min-height: 48px; display: grid; grid-template-columns: 1fr auto; align-items: center; }
+.page-mode-label { color: var(--muted); font-size: 12px; }
+.page-mode { position: relative; width: 168px; padding: 3px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 10px; background: color-mix(in srgb, var(--text) 8%, var(--card)); }
+.page-mode::before { content: ''; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 2); border-radius: 7px; background: var(--card); box-shadow: 0 1px 3px var(--shadow); transform: translateX(var(--page-mode-position, 0%)); transition: transform .22s cubic-bezier(.22,.72,.16,1); }
+.page-mode button { position: relative; min-height: 34px; padding: 0 4px; border: 0; background: transparent; color: var(--muted); font-family: inherit; font-size: 12px; }
+.page-mode button.on { color: var(--text); font-weight: 600; }
+
+/* ── 小弹窗 ── */
+.dlg-mask { position: fixed; inset: 0; background: var(--mask); display: none; align-items: center; justify-content: center; z-index: 55; }
+.dlg-mask.open { display: flex; }
+.dlg { background: var(--card); border-radius: 14px; padding: 18px; width: min(320px, 86vw); }
+.dlg-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.dlg-body { display: flex; align-items: center; gap: 8px; font-size: 15px; margin-bottom: 10px; }
+.dlg-body input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; font-size: 16px; font-family: inherit; background: var(--card); color: var(--text); text-align: center; }
+.dlg-tip { font-size: 12px; color: var(--faint); line-height: 1.6; margin-bottom: 14px; }
+.dlg-btns { display: flex; gap: 10px; }
+.dlg-btns button { flex: 1; padding: 10px 0; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--text); font-size: 14px; font-family: inherit; }
+.dlg-btns button.pri { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+/* ── 目录弹层 ── */
+#sheet-toc { max-height: 76vh; }
+#sheet-library { height: min(68vh, 640px); max-height: 74vh; }
+.toc-head { font-size: 15px; font-weight: 700; padding-bottom: 8px; }
+.toc-list { overflow-y: auto; flex: 1; }
+.library-seg { position: relative; isolation: isolate; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin: 3px 0 14px; padding: 3px; border-radius: 15px; background: color-mix(in srgb, var(--muted) 9%, transparent); }
+.library-seg button { position: relative; z-index: 1; min-height: 38px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); font-family: inherit; font-size: 13px; }
+.library-seg::before { content: ""; position: absolute; left: 3px; top: 3px; bottom: 3px; width: calc((100% - 9px) / 2); border-radius: 12px; background: var(--card); box-shadow: 0 3px 12px var(--shadow); pointer-events: none; transform: translateX(0); transition: transform .24s cubic-bezier(.2,.7,.2,1); }
+.library-seg[data-selected="annotations"]::before { transform: translateX(calc(100% + 3px)); }
+.library-seg button.on { color: var(--text); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .library-seg::before { transition: none; } }
+
+/* ── 底部弹窗（批注对话/设置/目录） ── */
+.sheet-mask { position: fixed; inset: 0; background: var(--mask); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .25s ease, visibility 0s linear .25s; z-index: 40; }
+.sheet-mask.open { opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); transform: translateY(105%); transition: transform .25s cubic-bezier(.22,.72,.16,1); z-index: 41; max-height: 70vh; display: flex; flex-direction: column; }
+.sheet.open { transform: none; }
+.sheet-quote-wrap { position: relative; border-left: 3px solid var(--human); padding-left: 9px; margin-bottom: 10px; }
+.sheet-quote-wrap.by-ai { border-left-color: var(--ai); }
+.sheet-quote { font-size: 13px; color: var(--quote); max-height: 72px; overflow-y: auto; }
+.sheet-quote-wrap.can-jump .sheet-quote { padding-right: 84px; }
+.sheet-jump { position: absolute; top: -7px; right: -4px; min-height: 44px; padding: 0 6px 0 10px; border: 0; background: var(--card); color: var(--muted); display: inline-flex; align-items: center; gap: 3px; font-family: inherit; font-size: 12px; white-space: nowrap; }
+.sheet-jump:active { color: var(--accent); }
+.sheet-comments { overflow-y: auto; flex: 1; margin-bottom: 12px; }
+.selection-annotations { display: flex; flex-direction: column; gap: 14px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border-soft); }
+.annotation-block { display: grid; grid-template-columns: 40px minmax(0,1fr); align-items: start; gap: 12px; padding: 2px; }
+.thread-avatar { position: relative; width: 40px; height: 40px; overflow: hidden; border-radius: 50%; display: grid; place-items: center; background: rgba(164,142,155,.12); color: var(--muted); font-size: 14px; font-weight: 650; }
+.thread-avatar.human { background: rgba(233,96,155,.12); color: var(--human-deep); }
+.thread-avatar.companion { background: rgba(74,113,181,.12); color: var(--ai); }
+.thread-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; }
+.annotation-body { min-width: 0; flex: 1; }
+.annotation-meta, .reply-meta { display: flex; align-items: baseline; gap: 7px; color: var(--faint); font-size: 11px; margin-bottom: 4px; }
+.annotation-meta strong, .reply-meta strong { font-weight: 650; }
+.name-human { color: var(--human-deep); }
+.name-companion { color: var(--ai); }
+.annotation-kind { display: none; }
+.annotation-text { font-size: 14px; line-height: 1.65; -webkit-user-select: text; user-select: text; }
+.reply-thread { display: flex; flex-direction: column; gap: 14px; padding: 0 2px 2px; }
+.reply-row { width: 100%; display: flex; align-items: flex-end; }
+.reply-row.from-companion { justify-content: flex-start; }
+.reply-row.from-human { justify-content: flex-end; }
+.reply-content { max-width: 86%; }
+.reply-row.from-human .reply-meta { justify-content: flex-end; }
+.reply-bubble { width: fit-content; max-width: 100%; padding: 8px 11px; border-radius: 15px; font-size: 14px; line-height: 1.58; -webkit-user-select: text; user-select: text; }
+.from-companion .reply-bubble { padding-left: 0; background: transparent; }
+.from-human .reply-bubble { margin-left: auto; border: 1px solid rgba(96,82,91,.13); background: rgba(255,255,255,.24); border-bottom-right-radius: 5px; }
+.reply-feedback { min-height: 24px; display: flex; align-items: center; gap: 7px; padding: 0 2px 4px; color: var(--faint); font-size: 11px; }
+.reply-feedback.to-companion { justify-content: flex-end; }
+.reply-feedback.from-companion { justify-content: flex-start; }
+.reply-feedback .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .34; animation: read-dot 1.25s infinite ease-in-out; }
+.reply-feedback .dot:nth-child(2) { animation-delay: .16s; }
+.reply-feedback .dot:nth-child(3) { animation-delay: .32s; }
+.reply-retry { min-height: 32px; margin: -4px -8px -4px 0; padding: 0 8px; border: 0; background: transparent; color: var(--human-deep); font: inherit; }
+@keyframes read-dot { 0%, 55%, 100% { transform: translateY(0); opacity: .3; } 28% { transform: translateY(-3px); opacity: .72; } }
+.sheet-input { flex-shrink: 0; min-height: 44px; display: flex; align-items: flex-end; gap: 4px; padding: 2px 4px 2px 14px; border: 1px solid var(--border-soft); border-radius: 18px; background: color-mix(in srgb, var(--muted) 7%, transparent); }
+.sheet-input textarea { min-width: 0; flex: 1; border: 0; outline: 0; padding: 10px 0; font-size: 16px; line-height: 1.5; max-height: min(240px, 32dvh); overflow-y: auto; resize: none; font-family: inherit; background: transparent; color: var(--text); }
+.sheet-input textarea::placeholder { color: var(--faint); }
+.sheet-input button { width: 40px; height: 40px; flex: 0 0 40px; padding: 0; border: 0; display: grid; place-items: center; background: transparent; color: var(--text); }
+.sheet-input button:disabled { opacity: .28; }
+.sheet-input button svg { width: 18px; height: 18px; }
+
+.toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--toast-bg); color: var(--toast-text); font-size: 13px; padding: 8px 16px; border-radius: 18px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 60; white-space: nowrap; }
+.toast.show { opacity: 1; }
+
+@media (min-width: 900px) and (min-height: 380px) {
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf{width:100%;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);grid-template-rows:auto auto auto;align-content:safe center;column-gap:40px;padding:var(--shelf-wide-top,96px) 40px calc(80px + var(--books-host-safe-bottom,0px));overflow-y:auto}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf-topbar{position:absolute;left:40px;right:40px;top:0;height:88px;padding:22px 0 14px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf-stage{grid-column:1;grid-row:1/4;align-self:stretch;width:100%;height:100%;min-height:360px;overflow:hidden}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf-book{top:50%;width:220px;height:326px;margin-top:-177px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf-stage::after{bottom:calc(50% - 196px);width:280px;height:28px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .page-dots{z-index:3;grid-column:1;grid-row:3;align-self:end;height:28px;margin-bottom:2px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .book-info{grid-column:2;grid-row:1;align-self:start;min-height:0;padding:0 0 18px;text-align:left}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .book-info h2{font-size:clamp(26px,2vw,34px)}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .book-info .author{font-size:14px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .reading-panel{grid-column:2;grid-row:2;align-self:start;margin:0;padding:22px;border-radius:24px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .notes{grid-column:2;grid-row:3;min-height:152px;padding:16px 0 0;overflow:hidden}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .note-card{min-height:0;padding:11px 13px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .home-quote{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+}
+@media (min-width: 900px) and (min-height: 540px) and (max-height: 800px) {
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf{padding-top:var(--shelf-wide-top,80px);padding-bottom:calc(72px + var(--books-host-safe-bottom,0px))}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf-topbar{height:76px;padding-top:16px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf-book{width:180px;height:267px;margin-top:-145px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .shelf-stage::after{bottom:calc(50% - 162px);width:230px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .book-info{padding-bottom:14px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .reading-panel{padding:17px 20px}
+:is(html:not([data-books-host]),html[data-books-host="chatgpt"]:not([data-books-display-mode="inline"])) .notes{padding-top:12px}
+}
+:root[data-home-hosted="1"] .shelf { --shelf-wide-top: 56px; }
+html:root[data-home-hosted="1"] .shelf-topbar { height: 44px; padding: 0 22px; justify-content: flex-end; }
+:root[data-home-hosted="1"] .shelf-topbar > div { display: none; }
+:root[data-library="1"] .shelf { --shelf-wide-top:16px; }
+:root[data-library="1"] .shelf-topbar { display:none; }
+@media (min-width:640px) and (max-width:899px) and (min-height:380px) {
+  :root[data-library="1"] .shelf { width:100%;height:100%;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1fr);grid-template-rows:minmax(66px,auto) auto auto;align-content:center;column-gap:18px;padding:10px 24px;overflow-y:auto; }
+  :root[data-library="1"] .shelf-stage { grid-column:1;grid-row:1/4;align-self:stretch;width:100%;height:100%;min-height:260px;overflow:hidden; }
+  :root[data-library="1"] .shelf-book { top:50%;width:145px;height:215px;margin-top:-115px; }
+  :root[data-library="1"] .shelf-stage::after { bottom:calc(50% - 133px);width:200px; }
+  :root[data-library="1"] .page-dots { z-index:3;grid-column:1;grid-row:3;align-self:end;height:20px; }
+  :root[data-library="1"] .book-info { grid-column:2;grid-row:1;align-self:start;min-height:0;padding:0 0 8px;text-align:left; }
+  :root[data-library="1"] .book-info h2 { font-size:20px; }
+  :root[data-library="1"] .reading-panel { grid-column:2;grid-row:2;align-self:start;margin:0;padding:13px 15px;border-radius:18px; }
+  :root[data-library="1"] .notes { grid-column:2;grid-row:3;min-height:115px;padding:12px 0 0;overflow:hidden; }
+  :root[data-library="1"] .note-card { min-height:0;padding:9px 11px; }
+  :root[data-library="1"] .home-quote { display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden; }
+}
+@media (min-width:900px) and (min-height:380px) and (max-height:539px) {
+  html:root[data-library="1"][data-home-hosted="1"] .shelf { grid-template-rows:minmax(74px,auto) auto auto; padding-bottom:18px; column-gap:24px; }
+  html:root[data-library="1"][data-home-hosted="1"] .shelf-stage { min-height:270px; }
+  html:root[data-library="1"][data-home-hosted="1"] .shelf-book { width:158px; height:234px; margin-top:-125px; }
+  html:root[data-library="1"][data-home-hosted="1"] .shelf-stage::after { bottom:calc(50% - 142px); }
+  html:root[data-library="1"][data-home-hosted="1"] .book-info h2 { font-size:21px; }
+  html:root[data-library="1"][data-home-hosted="1"] .reading-panel { padding:15px 17px; }
+}
+
+</style>
+</head>
+<body>
+
+<main class="shelf loading-hidden" id="shelf">
+  <header class="shelf-topbar">
+    <div><h1>书房</h1><small>读者与共读者的共读</small></div>
+    <button class="stats-btn" id="stats-btn" type="button" aria-label="查看共读记录">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19V11M12 19V5M19 19v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+  <section class="shelf-stage" id="shelf-stage" aria-label="书籍封面滑动选择区"></section>
+  <div class="page-dots" id="shelf-dots" aria-label="书籍位置"></div>
+  <section class="book-info" aria-live="polite">
+    <h2 id="home-title"></h2>
+    <p class="author" id="home-author"></p>
+  </section>
+  <section class="reading-panel" aria-label="阅读进度">
+    <div class="progress-line"><strong>阅读进度</strong><span id="home-progress-text"></span></div>
+    <div class="track"><i id="home-progress-bar"></i></div>
+    <div class="reader-progresses" aria-label="两个人的上次阅读位置">
+      <div class="reader-progress" id="home-progress-human">读者 · 未开始</div>
+      <div class="reader-progress" id="home-progress-ai">共读者 · 未开始</div>
+    </div>
+    <div class="panel-bottom"><span class="read-time" id="home-read-time"></span><button class="continue" id="home-read-btn" type="button">继续阅读</button></div>
+  </section>
+  <section class="notes">
+    <div class="section-head"><h3 id="home-notes-title">最近批注</h3><button id="home-notes-all" type="button">查看全部</button></div>
+    <div id="home-note-content"><div class="empty-note">正在整理书页…</div></div>
+  </section>
+  <input type="file" id="imp-file" accept=".epub,.txt" style="display:none">
+</main>
+
+<div class="reader" id="reader">
+  <div class="reader-top">
+    <button class="r-back" id="r-back" type="button" aria-label="返回书房"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H4m7-7-7 7 7 7"/></svg></button>
+    <div class="r-title" id="r-title"></div>
+    <span class="reader-page-bookmark" id="reader-page-bookmark" role="img" aria-label="本页有书签" hidden></span>
+  </div>
+  <div class="reader-viewport" id="r-viewport">
+    <div class="reader-flow" id="r-flow"></div>
+  </div>
+  <div class="reader-foot" id="r-foot"></div>
+  <div class="selection-tools" id="selection-tools" role="toolbar" aria-label="划线操作">
+    <button class="primary" id="selection-share" type="button">给共读者看</button>
+    <button id="selection-write" type="button">写一句</button>
+  </div>
+  <div class="rbar" id="rbar">
+    <button class="reader-menu-primary" id="rb-toc" type="button">
+      <span class="reader-menu-label">目录 <span class="reader-menu-progress" id="rb-progress">· 0%</span></span>
+      <svg class="reader-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+    </button>
+    <button id="rb-library" type="button">
+      <span>书签与批注</span>
+      <span class="reader-menu-meta" id="rb-library-count">0 · 0</span>
+    </button>
+    <button id="rb-theme" type="button">
+      <span>主题与设置</span>
+      <svg class="reader-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 18 5-12 5 12M5 13h6m4 5 3-8 3 8m-5-3h4"/></svg>
+    </button>
+    <div class="reader-quick-actions" role="group" aria-label="本页操作">
+      <button class="r-mark" id="r-mark" type="button" aria-label="夹上书签" aria-pressed="false">
+        <img class="r-mark-icon off" src="/reading/assets/bookmark-outline.svg?v=20261029-2" alt="">
+        <img class="r-mark-icon on" src="/reading/assets/bookmark-filled.svg?v=20261029-2" alt="">
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-mask" id="sheet-mask"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-quote-wrap" id="sheet-quote-wrap">
+    <div class="sheet-quote" id="sheet-quote"></div>
+    <button class="sheet-jump" id="sheet-jump" type="button" style="display:none">看原文 <span aria-hidden="true">›</span></button>
+  </div>
+  <div class="sheet-comments" id="sheet-comments"></div>
+  <div class="sheet-input">
+    <textarea id="sheet-text" rows="1" placeholder="写点什么…"></textarea>
+    <button id="sheet-send" type="button" aria-label="发送"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m21 3-7.2 18-3.7-7.1L3 10.2 21 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="m10.1 13.9 4.2-4.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-set" aria-label="阅读设置">
+  <div class="settings-grabber" aria-hidden="true"></div>
+  <div class="settings-head">
+    <h2>阅读设置</h2>
+    <button class="settings-close" id="settings-close" type="button" aria-label="关闭阅读设置">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <section class="settings-section">
+    <div class="settings-label">主题</div>
+    <div class="theme-grid" id="theme-seg">
+      <button class="theme-choice theme-yellow" type="button" data-t="yellow"><span class="theme-dots"><i></i><i></i><i></i></span><span>日记</span></button>
+      <button class="theme-choice theme-pink" type="button" data-t="pink"><span class="theme-dots"><i></i><i></i><i></i></span><span>淡粉</span></button>
+      <button class="theme-choice theme-night" type="button" data-t="night"><span class="theme-dots"><i></i><i></i><i></i></span><span>夜间</span></button>
+    </div>
+  </section>
+  <section class="settings-section">
+    <div class="settings-label">字体</div>
+    <div class="type-preview" id="type-preview">读到这一页，刚好想起你。</div>
+    <div id="typography-controls">
+      <div class="step-row"><span class="step-label">字号</span><div class="stepper"><button type="button" data-setting="fontSize" data-delta="-1" aria-label="减小字号"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button><output id="fs-val"></output><button type="button" data-setting="fontSize" data-delta="1" aria-label="增大字号"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M12 5v14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div></div>
+      <div class="step-row"><span class="step-label">行距</span><div class="stepper"><button type="button" data-setting="lineHeight" data-delta="-0.1" aria-label="减小行距"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button><output id="lh-val"></output><button type="button" data-setting="lineHeight" data-delta="0.1" aria-label="增大行距"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M12 5v14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div></div>
+    </div>
+  </section>
+  <section class="settings-section page-mode-section">
+    <div class="page-mode-label">翻页</div>
+    <div class="page-mode" id="page-mode">
+      <button type="button" data-mode="swipe">左右滑动</button>
+      <button type="button" data-mode="tap">两侧点按</button>
+    </div>
+  </section>
+</div>
+
+<div class="sheet" id="sheet-toc">
+  <div class="toc-head">目录</div>
+  <div class="toc-list" id="toc-list"></div>
+</div>
+
+<div class="sheet" id="sheet-library">
+  <div class="toc-head">书签与批注</div>
+  <div class="library-seg" id="library-seg" role="tablist" aria-label="书签与批注">
+    <button class="on" type="button" data-library-tab="bookmarks" role="tab">书签</button>
+    <button type="button" data-library-tab="annotations" role="tab">批注</button>
+  </div>
+  <div class="panel-list" id="library-list"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/reading/api';
+const HOME_HOSTED = document.documentElement.dataset.homeHosted === '1';
+const reader = document.getElementById('reader');
+const rFlow = document.getElementById('r-flow');
+const rViewport = document.getElementById('r-viewport');
+const rFoot = document.getElementById('r-foot');
+const rTitle = document.getElementById('r-title');
+const sheet = document.getElementById('sheet');
+const sheetMask = document.getElementById('sheet-mask');
+if (HOME_HOSTED && window.parent !== window) {
+  new MutationObserver(() => window.parent.postMessage({
+    type: 'guichao-books:sheet', open: sheetMask.classList.contains('open'), mask: getComputedStyle(sheetMask).backgroundColor
+  }, location.origin)).observe(sheetMask, { attributes: true, attributeFilter: ['class'] });
+}
+const selectionTools = document.getElementById('selection-tools');
+const toastEl = document.getElementById('toast');
+const shelfEl = document.getElementById('shelf');
+const shelfStage = document.getElementById('shelf-stage');
+const shelfDots = document.getElementById('shelf-dots');
+
+const R = {
+  books: [], book: null, manifest: null, chapters: {}, annos: [], marks: [],
+  ch: 0, page: 0, pages: 1, paraPages: [], step: 0,
+  beatTimer: null, sessionOpen: false,
+  pendingSel: null, selectionBusy: false, suppressReaderClickUntil: 0,
+  sheetMode: null, detailAnno: null, detailPollTimer: null, detailPollUntil: 0,
+  replyDelivery: null, libraryTab: 'bookmarks',
+};
+
+const People = {
+  human: { name: '读者', avatarUrl: HOME_HOSTED ? '/assets/human-avatar.jpg' : (globalThis.__BOOKS_HOST_AVATARS__?.human || ''), fallback: '读' },
+  companion: { name: '共读者', avatarUrl: HOME_HOSTED ? '/assets/companion-avatar.jpg' : (globalThis.__BOOKS_HOST_AVATARS__?.companion || ''), fallback: '伴' },
+};
+
+const Shelf = {
+  active: 0, cards: [], dots: [], pointerId: null,
+  startX: 0, startY: 0, dragX: 0, axis: null, moved: false,
+  noteRequest: 0,
+};
+
+const ReaderGesture = {
+  active: false, horizontal: false, cancelled: false,
+  startX: 0, startY: 0, lastX: 0, startedAt: 0,
+};
+// 触屏上用荧光笔涂抹代替系统选字；不支持 CSS 自定义高亮的浏览器保留系统选字。
+const PaintSelect = {
+  enabled: Boolean(globalThis.CSS?.highlights && globalThis.Highlight) && matchMedia('(hover: none) and (pointer: coarse)').matches,
+  timer: 0, startX: 0, startY: 0, active: false, paraIdx: -1, anchorOff: 0, focusOff: 0, range: null,
+};
+if (PaintSelect.enabled) document.documentElement.classList.add('paint-select');
+
+/* ── 阅读设置（按设备记忆） ── */
+const SET_KEY = 'readalong-settings';
+const settings = Object.assign(
+  { fontSize: 17, lineHeight: 1.9, theme: 'pink', pageMode: 'tap' },
+  (() => { try { return JSON.parse(localStorage.getItem(SET_KEY)) || {}; } catch { return {}; } })()
+);
+if (!['yellow', 'pink', 'night'].includes(settings.theme)) settings.theme = settings.theme === 'dark' ? 'night' : 'yellow';
+if (!['swipe', 'tap'].includes(settings.pageMode)) settings.pageMode = 'tap';
+function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch {} }
+
+function applyTheme() {
+  document.documentElement.dataset.theme = settings.theme;
+  const colors = getComputedStyle(document.documentElement);
+  const theme = { bg: colors.getPropertyValue('--bg').trim(), ink: colors.getPropertyValue('--text').trim() };
+  document.querySelector('meta[name="theme-color"]').content = theme.bg;
+  document.getElementById('theme-seg').style.setProperty('--theme-position', { yellow: '0%', pink: '100%', night: '200%' }[settings.theme]);
+  document.querySelectorAll('#theme-seg button').forEach((b) => b.classList.toggle('on', b.dataset.t === settings.theme));
+  if (HOME_HOSTED && window.parent !== window) {
+    window.parent.postMessage({ type: 'guichao-books:theme', bg: theme.bg, ink: theme.ink }, location.origin);
+  }
+}
+
+function applyTypography() {
+  rFlow.style.fontSize = settings.fontSize + 'px';
+  rFlow.style.lineHeight = String(settings.lineHeight);
+  document.getElementById('fs-val').textContent = settings.fontSize;
+  document.getElementById('lh-val').textContent = Number(settings.lineHeight).toFixed(1);
+  const preview = document.getElementById('type-preview');
+  preview.style.fontSize = settings.fontSize + 'px';
+  preview.style.lineHeight = String(settings.lineHeight);
+}
+
+function applyPageMode() {
+  document.getElementById('page-mode').style.setProperty('--page-mode-position', settings.pageMode === 'tap' ? '100%' : '0%');
+  document.querySelectorAll('#page-mode button').forEach((button) => {
+    const active = button.dataset.mode === settings.pageMode;
+    button.classList.toggle('on', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 1800);
+}
+
+function returnToHomeLogin() {
+  try { window.top.location.assign('/login.html'); }
+  catch { location.assign('/login.html'); }
+}
+
+async function decodeResponse(r) {
+  const json = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    returnToHomeLogin();
+    throw new Error('小家登录已过期');
+  }
+  if (!r.ok) throw new Error(json.error || r.status);
+  return json;
+}
+
+async function apiGet(path) {
+  return decodeResponse(await fetch(API + path, { cache: 'no-store' }));
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive: true,
+  });
+  return decodeResponse(r);
+}
+
+async function apiDelete(path) {
+  const r = await fetch(API + path, { method: 'DELETE' });
+  return decodeResponse(r);
+}
+
+function coverUrl(book) {
+  return book && book.hasCover ? `${API}/cover/${book.bookId}` : '';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function companionLabel(item, fallback = '共读者') {
+  if (item?.author === 'ai' || item?.createdBy === 'ai') return People.companion.name;
+  return fallback;
+}
+
+function personFor(item, author = item?.author || item?.createdBy) {
+  if (author === 'human' || author === 'human') return People.human;
+  return People.companion;
+}
+
+function avatarHtml(person, side = '') {
+  const src = String(person?.avatarUrl || '').trim();
+  return `<div class="thread-avatar ${esc(side)}"><span>${esc(person?.fallback || '')}</span>${src ? `<img src="${esc(src)}" alt="" onerror="this.style.display='none'">` : ''}</div>`;
+}
+
+function personNameClass(person) {
+  if (person === People.human) return 'name-human';
+  return 'name-companion';
+}
+
+function fmtThreadTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())} · ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function fmtDur(ms) {
+  const minutes = Math.round((ms || 0) / 60000);
+  if (minutes < 60) return `${minutes}分钟`;
+  return `${Math.floor(minutes / 60)}小时${minutes % 60}分`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function fmtAgo(iso) {
+  if (!iso) return '';
+  const elapsed = Math.max(0, Date.now() - new Date(iso).getTime());
+  if (!Number.isFinite(elapsed)) return '';
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}天前`;
+  return fmtTime(iso).slice(0, 5);
+}
+
+function readerProgressText(summary, fallbackLabel) {
+  const label = summary?.label || fallbackLabel;
+  if (!summary?.lastReadAt) return `${label} · 未开始`;
+  return `${label} · ${Math.max(0, Math.round(Number(summary.progressPct) || 0))}% · ${fmtAgo(summary.lastReadAt)}`;
+}
+
+/* ── 书架 ── */
+
+function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+function cardTransform(position) {
+  const abs = Math.abs(position);
+  const x = position * 132;
+  const z = Math.max(-150, 28 - abs * 84);
+  const scale = Math.max(.68, 1 - abs * .16);
+  const rotate = clamp(position * -34, -48, 48);
+  return `translate3d(calc(-50% + ${x}px), ${abs * 10}px, ${z}px) rotateY(${rotate}deg) scale(${scale})`;
+}
+
+function renderShelfCards(offset = 0) {
+  Shelf.cards.forEach((card, index) => {
+    const position = index - Shelf.active + offset;
+    const abs = Math.abs(position);
+    card.style.transform = cardTransform(position);
+    card.style.opacity = abs > 2.2 ? '0' : String(Math.max(.28, 1 - abs * .26));
+    card.style.filter = abs < .35 ? 'none' : `saturate(${Math.max(.42, 1 - abs * .2)}) brightness(${Math.max(.82, 1 - abs * .07)})`;
+    card.style.zIndex = String(20 - Math.round(abs * 4));
+    card.classList.toggle('is-active', index === Shelf.active && Math.abs(offset) < .2);
+    card.setAttribute('aria-hidden', abs > 2.2 ? 'true' : 'false');
+    card.tabIndex = index === Shelf.active ? 0 : -1;
+  });
+}
+
+function activeShelfBook() { return R.books[Shelf.active] || null; }
+
+function renderHomeNote(book, annotation, total = 0) {
+  const content = document.getElementById('home-note-content');
+  document.getElementById('home-notes-title').textContent = '最近批注';
+  document.getElementById('home-notes-all').textContent = total > 0 ? `查看全部 · ${total}` : '查看全部';
+  if (!annotation) {
+    content.innerHTML = '<div class="empty-note">这一页还安静着</div>';
+    return;
+  }
+  const root = annotationRoot(annotation);
+  content.innerHTML = `<article class="note-card" data-id="${esc(annotation.id)}"><p class="home-quote">${esc(annotation.quote)}</p><p class="note-meta"><span>${annotation.createdBy === 'human' ? '我' : companionLabel(annotation)}</span><span>${fmtTime(annoLastAt(annotation))}</span><span>${root.replies.length}条回复</span></p></article>`;
+}
+
+async function renderShelfContent() {
+  const book = activeShelfBook();
+  if (!book) return;
+  document.getElementById('home-title').textContent = book.title;
+  document.getElementById('home-author').textContent = book.author || '';
+  const progress = Number(book.progressPct) || 0;
+  document.getElementById('home-progress-text').textContent = progress ? `已读 ${progress}%` : '未开始';
+  document.getElementById('home-progress-bar').style.width = `${progress}%`;
+  document.getElementById('home-progress-human').textContent = readerProgressText(book.readers?.human, '读者');
+  document.getElementById('home-progress-ai').textContent = readerProgressText(book.readers?.ai, '共读者');
+  document.getElementById('home-read-time').textContent = book.totalReadMs ? `共读 ${fmtDur(book.totalReadMs)}` : '等你翻开';
+  document.getElementById('home-read-btn').textContent = progress ? '继续阅读' : '开始阅读';
+  document.getElementById('home-read-btn').disabled = false;
+  Shelf.dots.forEach((dot, index) => dot.classList.toggle('on', index === Shelf.active));
+  const request = ++Shelf.noteRequest;
+  document.getElementById('home-note-content').innerHTML = '<div class="empty-note">正在整理书页…</div>';
+  try {
+    const { annotations } = await apiGet('/annotations/' + book.bookId);
+    if (request !== Shelf.noteRequest || activeShelfBook()?.bookId !== book.bookId) return;
+    const annotated = annotations.filter((item) => annotationRoot(item).text);
+    const latest = annotated.slice().sort((a, b) => annoLastAt(b).localeCompare(annoLastAt(a)))[0];
+    renderHomeNote(book, latest, annotated.length);
+  } catch (e) {
+    if (request === Shelf.noteRequest && !loginScreen.classList.contains('hidden')) return;
+    if (request === Shelf.noteRequest) renderHomeNote(book, null);
+  }
+}
+
+function selectShelf(index) {
+  if (!R.books.length) return;
+  Shelf.active = clamp(index, 0, R.books.length - 1);
+  renderShelfCards();
+  renderShelfContent();
+}
+
+function buildShelf(books) {
+  shelfStage.innerHTML = '';
+  shelfDots.innerHTML = '';
+  Shelf.cards = books.map((book, index) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'shelf-book';
+    card.setAttribute('aria-label', `选择《${book.title}》`);
+    const cover = coverUrl(book);
+    card.innerHTML = `<span class="book-shell">${cover ? `<img src="${esc(cover)}" alt="《${esc(book.title)}》封面" draggable="false">` : `<span class="book-placeholder">${esc(book.title)}</span>`}</span>`;
+    card.addEventListener('click', () => {
+      if (Shelf.moved) return;
+      if (index !== Shelf.active) selectShelf(index);
+      else if (document.documentElement.dataset.library === '1' && window.parent !== window) {
+        window.parent.postMessage({ type: 'guichao-books:book-detail', bookId: book.bookId }, location.origin);
+      }
+    });
+    shelfStage.appendChild(card);
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'page-dot';
+    dot.setAttribute('aria-label', `第 ${index + 1} 本书`);
+    dot.addEventListener('click', () => selectShelf(index));
+    shelfDots.appendChild(dot);
+    Shelf.dots.push(dot);
+    return card;
+  });
+  selectShelf(0);
+}
+
+async function loadShelf() {
+  try {
+    const { books } = await apiGet('/books');
+    const ids = new URLSearchParams(location.search).get('ids');
+    const allowed = ids === null ? null : new Set(ids.split(',').filter(Boolean));
+    R.books = books.filter(book => !book.removed && (!allowed || allowed.has(book.bookId))).sort((a, b) => String(b.lastOpenedAt || '').localeCompare(String(a.lastOpenedAt || '')));
+    Shelf.dots = [];
+    if (!R.books.length) {
+      shelfStage.innerHTML = '<div class="shelf-empty">书房还空着。<br>点右上角“导入”，把第一本书放进来。</div>';
+      shelfDots.innerHTML = '';
+      document.getElementById('home-title').textContent = '等一本书来';
+      document.getElementById('home-author').textContent = '';
+      document.getElementById('home-progress-text').textContent = '未开始';
+      document.getElementById('home-progress-bar').style.width = '0%';
+      document.getElementById('home-progress-human').textContent = '读者 · 未开始';
+      document.getElementById('home-progress-ai').textContent = '共读者 · 未开始';
+      document.getElementById('home-read-time').textContent = '书页会在这里醒来';
+      document.getElementById('home-read-btn').disabled = true;
+      renderHomeNote(null, null);
+      return;
+    }
+    document.getElementById('home-read-btn').disabled = false;
+    buildShelf(R.books);
+  } catch (e) {
+    shelfStage.innerHTML = '<div class="shelf-empty">书页暂时没有翻开。<br>' + esc(e.message) + '</div>';
+  }
+}
+
+shelfStage.addEventListener('pointerdown', (event) => {
+  if (Shelf.pointerId !== null || !R.books.length) return;
+  Shelf.pointerId = event.pointerId; Shelf.startX = event.clientX; Shelf.startY = event.clientY;
+  Shelf.dragX = 0; Shelf.axis = null; Shelf.moved = false;
+});
+shelfStage.addEventListener('pointermove', (event) => {
+  if (event.pointerId !== Shelf.pointerId) return;
+  const dx = event.clientX - Shelf.startX; const dy = event.clientY - Shelf.startY;
+  if (!Shelf.axis && Math.max(Math.abs(dx), Math.abs(dy)) > 7) {
+    Shelf.axis = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+    if (Shelf.axis === 'horizontal') {
+      shelfStage.setPointerCapture(event.pointerId);
+      shelfStage.classList.add('dragging');
+    }
+  }
+  if (Shelf.axis !== 'horizontal') return;
+  Shelf.moved = Math.abs(dx) > 8; Shelf.dragX = dx;
+  const resisted = (Shelf.active === 0 && dx > 0) || (Shelf.active === R.books.length - 1 && dx < 0) ? dx * .34 : dx;
+  renderShelfCards(resisted / 132);
+});
+function finishShelfPointer(event) {
+  if (event.pointerId !== Shelf.pointerId) return;
+  shelfStage.classList.remove('dragging');
+  if (Shelf.axis === 'horizontal' && Math.abs(Shelf.dragX) > 42) Shelf.active = clamp(Shelf.active + (Shelf.dragX < 0 ? 1 : -1), 0, R.books.length - 1);
+  Shelf.pointerId = null; Shelf.axis = null; renderShelfCards(); renderShelfContent(); setTimeout(() => { Shelf.moved = false; }, 0);
+}
+shelfStage.addEventListener('pointerup', finishShelfPointer);
+shelfStage.addEventListener('pointercancel', finishShelfPointer);
+shelfStage.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowRight') selectShelf(Shelf.active + 1);
+  if (event.key === 'ArrowLeft') selectShelf(Shelf.active - 1);
+});
+
+document.getElementById('home-read-btn').addEventListener('click', async () => {
+  const book = activeShelfBook(); if (!book) return;
+  await openBookDirect(book.bookId);
+});
+document.getElementById('home-notes-all').addEventListener('click', async () => {
+  const book = activeShelfBook(); if (!book) return;
+  if (await loadBookData(book.bookId)) openLibrarySheet('annotations');
+});
+document.getElementById('home-note-content').addEventListener('click', async (event) => {
+  const item = event.target.closest('.note-card');
+  const book = activeShelfBook();
+  if (!item || !book || !(await loadBookData(book.bookId))) return;
+  const anno = R.annos.find((entry) => entry.id === item.dataset.id);
+  if (anno) openSheet('detail', anno, { jump: true });
+});
+
+/* ── 书房入口 ── */
+
+document.getElementById('stats-btn').addEventListener('click', () => {
+  if (HOME_HOSTED && window.parent !== window) {
+    window.parent.postMessage({ type: 'guichao-books:stats' }, location.origin);
+    return;
+  }
+  location.assign('/reading/stats.html');
+});
+
+window.addEventListener('message', (event) => {
+  if (!HOME_HOSTED || event.origin !== location.origin || event.source !== window.parent) return;
+  if (event.data?.type === 'guichao-books:sheet-close') closeSheet();
+  if (event.data?.type === 'guichao-books:host-ready') {
+    applyTheme();
+    window.parent.postMessage({ type: 'guichao-books:view', view: reader.classList.contains('open') ? 'reader' : 'shelf' }, location.origin);
+  }
+  if (event.data?.type === 'guichao-books:import') document.getElementById('imp-file').click();
+  if (event.data?.type === 'guichao-books:people') {
+    ['human', 'companion'].forEach((key) => {
+      const incoming = event.data.people?.[key];
+      if (!incoming) return;
+      if (incoming.name) People[key].name = String(incoming.name);
+      if (incoming.avatarUrl) People[key].avatarUrl = String(incoming.avatarUrl);
+    });
+    if (R.detailAnno && sheet.classList.contains('open')) renderComments(R.detailAnno);
+  }
+});
+if (HOME_HOSTED && window.parent !== window) {
+  window.parent.postMessage({ type: 'guichao-books:people-request' }, location.origin);
+}
+
+document.getElementById('imp-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  toast(`《${file.name}》导入中…`);
+  try {
+    const r = await fetch(`${API}/import?filename=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(json.error || r.status);
+    toast(`《${json.book.title}》导入好了，共${json.book.chapterCount}章`);
+    loadShelf();
+  } catch (err) {
+    toast('导入失败：' + err.message);
+  }
+});
+
+/* ── 书籍数据与首页直达 ── */
+
+async function loadBookData(bookId) {
+  const book = R.books.find((b) => b.bookId === bookId);
+  if (!book) return false;
+  if (!R.book || R.book.bookId !== bookId) R.chapters = {};
+  R.book = book;
+  try {
+    const [detail, annos, marks] = await Promise.all([
+      apiGet('/book/' + bookId),
+      apiGet('/annotations/' + bookId),
+      apiGet('/bookmarks/' + bookId),
+    ]);
+    R.manifest = detail.manifest;
+    R.marks = marks.bookmarks;
+    R.book.lastPos = detail.lastPos;
+    R.book.progressPct = detail.progressPct;
+    R.book.lastOpenedAt = detail.lastOpenedAt;
+    R.book.readers = detail.readers;
+    R.book.totalReadMs = detail.totalReadMs;
+    R.annos = annos.annotations;
+    return true;
+  } catch (e) {
+    toast('加载失败：' + e.message);
+    return false;
+  }
+}
+
+async function openBookDirect(bookId) {
+  if (!(await loadBookData(bookId))) return;
+  const pos = R.book.lastPos;
+  await enterReader(pos && Number.isInteger(pos.chapter) ? pos.chapter : 0, pos ? pos.seqTop : 0);
+}
+
+function annoLastAt(a) {
+  const comments = Array.isArray(a.comments) ? a.comments : [];
+  return comments.length ? comments[comments.length - 1].createdAt : a.createdAt;
+}
+
+function selectionKey(annotation) {
+  if (!Number.isInteger(annotation?.seq) || !Number.isInteger(annotation?.startOff) || !Number.isInteger(annotation?.endOff)) return `id:${annotation.id}`;
+  return `${annotation.seq}:${annotation.startOff}:${annotation.endOff}`;
+}
+
+function selectionGroup(annotation) {
+  const key = selectionKey(annotation);
+  return R.annos.filter((item) => selectionKey(item) === key).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
+function annotationRoot(annotation) {
+  const comments = Array.isArray(annotation.comments) ? annotation.comments : [];
+  const text = String(annotation.note || annotation.comment || '').trim();
+  const first = comments[0];
+  if (!text && first?.author === annotation.createdBy && first.kind !== 'reply') {
+    return { text: String(first.text || '').trim(), at: first.createdAt || annotation.createdAt, replies: comments.slice(1) };
+  }
+  return { text, at: annotation.createdAt, replies: comments };
+}
+
+const libraryScrollPositions = new Map();
+let displayedLibraryKey = null;
+function renderLibrarySheet(tab = R.libraryTab || 'bookmarks') {
+  const list = document.getElementById('library-list');
+  if (displayedLibraryKey) libraryScrollPositions.set(displayedLibraryKey, list.scrollTop);
+  R.libraryTab = tab === 'annotations' ? 'annotations' : 'bookmarks';
+  document.querySelectorAll('#library-seg button').forEach((button) => {
+    const active = button.dataset.libraryTab === R.libraryTab;
+    button.classList.toggle('on', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  displayedLibraryKey = `${R.book.bookId}:${R.libraryTab}`;
+  document.getElementById('library-seg').dataset.selected = R.libraryTab;
+  const restoreScroll = () => { list.scrollTop = libraryScrollPositions.get(displayedLibraryKey) || 0; };
+  if (R.libraryTab === 'annotations') {
+    const grouped = new Map();
+    for (const annotation of R.annos) {
+      const key = selectionKey(annotation);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(annotation);
+    }
+    const groups = [...grouped.values()].sort((a, b) =>
+      Math.max(...b.map(item => Date.parse(annoLastAt(item)) || 0)) - Math.max(...a.map(item => Date.parse(annoLastAt(item)) || 0)));
+    list.innerHTML = groups.length ? groups.map((group) => {
+      const first = group[0];
+      const authors = [...new Set(group.map(annotation => annotation.createdBy))];
+      const lastAt = group.map(annoLastAt).sort().at(-1);
+      const replies = group.reduce((count, annotation) => count + annotationRoot(annotation).replies.length, 0);
+      return `<div class="anno-item" data-id="${esc(first.id)}">
+        <div class="anno-quote">${esc(first.quote)}</div>
+        <div class="anno-sub">${authors.map(author => `<span class="who-${esc(author)}">${author === 'human' ? '我' : esc(personFor(null, author).name)}</span>`).join('')}<span>${fmtTime(lastAt)}</span><span>${replies}条</span></div>
+      </div>`;
+    }).join('') : '<div class="empty-tip">还没有批注，读起来吧</div>';
+    restoreScroll();
+    return;
+  }
+  const marks = R.marks.slice().sort((a, b) => a.seq - b.seq);
+  list.innerHTML = marks.length ? marks.map((mark) =>
+    `<button class="mark-item" type="button" data-id="${esc(mark.id)}">
+      <div class="mark-excerpt">${esc(mark.excerpt || '这一页')}</div>
+      <div class="mark-sub"><span>${esc(mark.chapterTitle || `第 ${Number(mark.chapter) + 1} 章`)}</span><span>${fmtTime(mark.createdAt)}</span></div>
+    </button>`
+  ).join('') : '<div class="empty-tip">还没有书签，读到想停的地方再夹一枚</div>';
+  restoreScroll();
+}
+
+function openLibrarySheet(tab = R.libraryTab || 'bookmarks') {
+  renderLibrarySheet(tab);
+  openSheetEl(document.getElementById('sheet-library'));
+}
+
+document.getElementById('library-seg').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-library-tab]');
+  if (button) renderLibrarySheet(button.dataset.libraryTab);
+});
+
+document.getElementById('library-list').addEventListener('click', async (event) => {
+  const annoItem = event.target.closest('.anno-item');
+  if (annoItem) {
+    const anno = R.annos.find((entry) => entry.id === annoItem.dataset.id);
+    if (anno) { closeSheet(); openSheet('detail', anno, { jump: true }); }
+    return;
+  }
+  const markItem = event.target.closest('.mark-item');
+  if (!markItem) return;
+  const mark = R.marks.find((entry) => entry.id === markItem.dataset.id);
+  if (!mark) return;
+  closeSheet();
+  await enterReader(Number(mark.chapter) || 0, mark.seq);
+});
+
+/* ── 阅读器：加载与分页 ── */
+
+async function loadChapter(idx) {
+  if (!R.chapters[idx]) R.chapters[idx] = await apiGet(`/book/${R.book.bookId}/chapter/${idx}`);
+  return R.chapters[idx];
+}
+
+async function enterReader(chIdx, seq) {
+  closeSheet();
+  document.body.classList.add('reader-open');
+  reader.classList.add('open');
+  if (HOME_HOSTED && window.parent !== window) window.parent.postMessage({ type: 'guichao-books:view', view: 'reader' }, location.origin);
+  if (!R.sessionOpen) {
+    R.sessionOpen = true;
+    sendBeat('open');
+  }
+  await showChapter(chIdx, seq);
+  startBeats();
+}
+
+async function showChapter(chIdx, seq) {
+  clearNativeSelection();
+  let ch;
+  try {
+    ch = await loadChapter(chIdx);
+  } catch { toast('章节加载失败'); return; }
+  R.ch = chIdx;
+  rTitle.textContent = R.book.title;
+  rFlow.classList.add('no-transition');
+  renderChapterHtml(ch);
+  paginate();
+  let page = 0;
+  if (Number.isInteger(seq)) {
+    const paraIdx = Math.max(0, Math.min(ch.paragraphs.length - 1, seq - ch.baseSeq));
+    page = R.paraPages[paraIdx] ? R.paraPages[paraIdx].start : 0;
+  }
+  gotoPage(page, { silentIfSame: false });
+  requestAnimationFrame(() => rFlow.classList.remove('no-transition'));
+}
+
+function renderChapterHtml(ch) {
+  const annosByPara = {};
+  for (const a of R.annos) {
+    const paraIdx = a.seq - ch.baseSeq;
+    if (paraIdx >= 0 && paraIdx < ch.paragraphs.length) {
+      (annosByPara[paraIdx] = annosByPara[paraIdx] || []).push(a);
+    }
+  }
+  rFlow.innerHTML = ch.paragraphs.map((text, i) => {
+    const cls = i === 0 && text === ch.title ? ' class="is-title"' : '';
+    return `<p data-i="${i}"${cls}>${renderParaHtml(text, annosByPara[i] || [])}</p>`;
+  }).join('');
+}
+
+function renderParaHtml(text, annos) {
+  if (!annos.length) return esc(text);
+  const bounds = new Set([0, text.length]);
+  for (const a of annos) {
+    bounds.add(Math.max(0, Math.min(text.length, a.startOff)));
+    bounds.add(Math.max(0, Math.min(text.length, a.endOff)));
+  }
+  const points = [...bounds].sort((x, y) => x - y);
+  let html = '';
+  for (let k = 0; k < points.length - 1; k += 1) {
+    const [s, e] = [points[k], points[k + 1]];
+    if (e <= s) continue;
+    const covering = annos.filter((a) => a.startOff <= s && a.endOff >= e);
+    const segText = esc(text.slice(s, e));
+    if (!covering.length) {
+      html += segText;
+    } else {
+      const first = covering.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))[0];
+      const cls = `hl-${first.createdBy}${covering.some((a) => annotationRoot(a).text) ? ' has-note' : ''}`;
+      html += `<span class="seg ${cls}" data-ids="${covering.map((a) => a.id).join(',')}">${segText}</span>`;
+    }
+    const shownBubbles = new Set();
+    for (const a of annos) {
+      const key = `${a.startOff}:${a.endOff}`;
+      if (a.endOff === e && a.id !== 'preview' && !shownBubbles.has(key)) {
+        const creators = annos.filter((item) => item.id !== 'preview' && item.startOff === a.startOff && item.endOff === a.endOff)
+          .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')));
+        const shownCreators = new Set();
+        for (const item of creators) {
+          if (shownCreators.has(item.createdBy)) continue;
+          html += `<span class="bub by-${item.createdBy}" data-id="${item.id}"></span>`;
+          shownCreators.add(item.createdBy);
+        }
+        shownBubbles.add(key);
+      }
+    }
+  }
+  return html;
+}
+
+function paginate() {
+  const w = rViewport.clientWidth - 44; /* padding 22*2 */
+  const gap = 44;
+  R.step = w + gap;
+  rFlow.style.transform = 'none';
+  rFlow.style.columnWidth = w + 'px';
+  const flowLeft = rFlow.getBoundingClientRect().left;
+  R.pages = Math.max(1, Math.ceil((rFlow.scrollWidth - 1) / R.step));
+  R.paraPages = [];
+  rFlow.querySelectorAll('p').forEach((p) => {
+    const rects = p.getClientRects();
+    if (!rects.length) { R.paraPages.push({ start: 0, end: 0 }); return; }
+    const start = Math.round((rects[0].left - flowLeft) / R.step);
+    const end = Math.round((rects[rects.length - 1].left - flowLeft) / R.step);
+    R.paraPages.push({ start, end });
+  });
+}
+
+function currentParaRange() {
+  const ch = R.chapters[R.ch];
+  let first = null;
+  let last = null;
+  R.paraPages.forEach((pp, i) => {
+    if (pp.start <= R.page && pp.end >= R.page) {
+      if (first === null) first = i;
+      last = i;
+    }
+  });
+  if (first === null) return null;
+  return { seqStart: ch.baseSeq + first, seqEnd: ch.baseSeq + last };
+}
+
+function gotoPage(page, { silentIfSame = true } = {}) {
+  const clamped = Math.max(0, Math.min(R.pages - 1, page));
+  if (silentIfSame && clamped === R.page) return;
+  R.page = clamped;
+  rFlow.style.transform = `translateX(${-clamped * R.step}px)`;
+  const ch = R.chapters[R.ch];
+  const range = currentParaRange();
+  const progress = range ? Math.round(((range.seqStart + 1) / R.manifest.paraCount) * 1000) / 10 : 0;
+  rFoot.textContent = `${clamped + 1}/${R.pages} · ${ch.title} · ${progress}%`;
+  updateMarkBtn();
+  if (range) sendBeat('page', range);
+}
+
+async function turnPage(dir) {
+  clearNativeSelection();
+  const next = R.page + dir;
+  if (next >= R.pages && R.ch < R.manifest.chapterCount - 1) {
+    await showChapter(R.ch + 1, null);
+    return;
+  }
+  if (next < 0 && R.ch > 0) {
+    await showChapter(R.ch - 1, null);
+    gotoPage(R.pages - 1, { silentIfSame: false });
+    return;
+  }
+  gotoPage(next);
+}
+
+/* ── 心跳 ── */
+
+function beatPayload(event) {
+  const range = currentParaRange() || {};
+  return {
+    bookId: R.book.bookId,
+    event,
+    chapter: R.ch,
+    seqStart: range.seqStart,
+    seqEnd: range.seqEnd,
+    pageKey: `c${R.ch}p${R.page}`,
+  };
+}
+
+function sendBeat(event, range) {
+  if (!R.book) return;
+  const payload = event === 'open' || event === 'close'
+    ? { bookId: R.book.bookId, event }
+    : beatPayload(event);
+  if (range) Object.assign(payload, range);
+  apiPost('/beat', payload).catch(() => {});
+}
+
+function startBeats() {
+  stopBeats();
+  R.beatTimer = setInterval(() => {
+    if (!document.hidden && reader.classList.contains('open')) sendBeat('beat');
+  }, 10000);
+}
+
+function stopBeats() {
+  if (R.beatTimer) clearInterval(R.beatTimer);
+  R.beatTimer = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && R.sessionOpen && R.book) {
+    navigator.sendBeacon(API + '/beat', new Blob([JSON.stringify(beatPayload('beat'))], { type: 'application/json' }));
+  }
+});
+
+function exitReader() {
+  if (R.sessionOpen) {
+    sendBeat('close');
+    R.sessionOpen = false;
+  }
+  stopBeats();
+  clearNativeSelection();
+  closeBar();
+  reader.classList.remove('open');
+  document.body.classList.remove('reader-open');
+  if (HOME_HOSTED && window.parent !== window) window.parent.postMessage({ type: 'guichao-books:view', view: 'shelf' }, location.origin);
+  renderShelfContent();
+}
+
+/* ── 书签 ── */
+
+function pageMark() {
+  const range = currentParaRange();
+  if (!range) return null;
+  return R.marks.find((mk) => mk.seq >= range.seqStart && mk.seq <= range.seqEnd) || null;
+}
+
+function updateMarkBtn() {
+  const button = document.getElementById('r-mark');
+  const active = Boolean(pageMark());
+  button.classList.toggle('on', active);
+  document.getElementById('reader-page-bookmark').hidden = !active;
+  button.setAttribute('aria-pressed', String(active));
+  button.setAttribute('aria-label', active ? '取下书签' : '夹上书签');
+}
+
+async function toggleBookmark() {
+  const range = currentParaRange();
+  if (!range) return;
+  const existing = pageMark();
+  try {
+    if (existing) {
+      await apiDelete(`/bookmarks/${R.book.bookId}/${existing.id}`);
+      R.marks = R.marks.filter((mk) => mk.id !== existing.id);
+      toast('书签已取下');
+    } else {
+      const { bookmark } = await apiPost('/bookmarks', { bookId: R.book.bookId, seq: range.seqStart });
+      R.marks.push(bookmark);
+      R.marks.sort((a, b) => a.seq - b.seq);
+      toast('书签夹好了');
+    }
+    updateMarkBtn();
+    document.getElementById('rb-library-count').textContent = `${R.marks.length} 书签 · ${R.annos.length} 批注`;
+    const button = document.getElementById('r-mark');
+    button.classList.remove('pulse');
+    void button.offsetWidth;
+    button.classList.add('pulse');
+    window.setTimeout(() => button.classList.remove('pulse'), 380);
+  } catch (e) {
+    toast('书签失败：' + e.message);
+  }
+}
+
+/* ── 阅读器点击：翻页 / 原生划线 ── */
+
+function openBar() {
+  const range = currentParaRange();
+  const progress = range && R.manifest && R.manifest.paraCount
+    ? Math.round(((range.seqStart + 1) / R.manifest.paraCount) * 1000) / 10
+    : Number(R.book && R.book.progressPct) || 0;
+  document.getElementById('rb-progress').textContent = `· ${progress}%`;
+  document.getElementById('rb-toc').style.setProperty('--reading-progress', `${Math.max(0, Math.min(100, progress))}%`);
+  document.getElementById('rb-library-count').textContent = `${R.marks.length} 书签 · ${R.annos.length} 批注`;
+  reader.classList.add('bar-open');
+}
+
+function closeBar() { reader.classList.remove('bar-open'); }
+
+reader.addEventListener('click', async (e) => {
+  if (e.target.closest('#r-back')) { exitReader(); return; }
+  if (e.target.closest('#selection-tools')) return;
+  if (e.target.closest('#r-mark')) { toggleBookmark(); return; }
+
+  if (e.target.closest('#rb-toc')) { closeBar(); openTocSheet(); return; }
+  if (e.target.closest('#rb-library')) { closeBar(); openLibrarySheet(); return; }
+  if (e.target.closest('#rb-theme')) { closeBar(); openSetSheet(); return; }
+  if (e.target.closest('#rbar')) return;
+  // 工具条展开期间：点任意处只收起，不翻页不选中
+  if (reader.classList.contains('bar-open')) { closeBar(); return; }
+
+  const nativeSelection = window.getSelection();
+  if (Date.now() < R.suppressReaderClickUntil || (nativeSelection && !nativeSelection.isCollapsed)) return;
+  if (PaintSelect.range) { clearNativeSelection(); return; }
+
+  const bub = e.target.closest('.bub');
+  if (bub) {
+    const anno = R.annos.find((a) => a.id === bub.dataset.id);
+    if (anno) openSheet('detail', anno, {});
+    return;
+  }
+
+  const seg = e.target.closest('.seg');
+  if (seg && seg.dataset.ids) {
+    const anno = R.annos.find((a) => a.id === seg.dataset.ids.split(',')[0]);
+    if (anno) openSheet('detail', anno, {});
+    return;
+  }
+
+  const x = e.clientX / window.innerWidth;
+  if (settings.pageMode === 'tap' && x < 0.33) turnPage(-1);
+  else if (settings.pageMode === 'tap' && x > 0.67) turnPage(1);
+  else openBar();
+});
+
+/* ── 选字划线：鼠标用系统选字，触屏用荧光笔涂抹 ── */
+
+function makeSelectionClientId() {
+  const clientId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+    ? `reading-selection-${globalThis.crypto.randomUUID()}`
+    : `reading-selection-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return clientId;
+}
+
+const callStatusWaiters = new Map();
+const callDeliveryWaiters = new Map();
+const acceptedCallRequests = new Set();
+function callRequestId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function activeHomeCall() {
+  if (!HOME_HOSTED) return Promise.resolve(false);
+  const requestId = callRequestId('books-call-status');
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      callStatusWaiters.delete(requestId);
+      resolve(false);
+    }, 800);
+    callStatusWaiters.set(requestId, (connected) => {
+      window.clearTimeout(timer);
+      resolve(Boolean(connected));
+    });
+    window.parent.postMessage({ type: 'guichao-books:call-status', requestId }, location.origin);
+  });
+}
+
+function sendSelectionToCall(annotation, note = '', deliveryId = annotation?.id) {
+  if (!HOME_HOSTED || !annotation) return Promise.reject(new Error('电话入口不可用'));
+  const requestId = callRequestId('books-call-selection');
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      callDeliveryWaiters.delete(requestId);
+      reject(new Error('电话没有确认收到'));
+    }, 8000);
+    callDeliveryWaiters.set(requestId, {
+      resolve: (value) => { window.clearTimeout(timer); resolve(value); },
+      reject: (error) => { window.clearTimeout(timer); reject(error); },
+    });
+    window.parent.postMessage({
+      type: 'guichao-books:call-selection',
+      requestId,
+      selection: {
+        selectionId: annotation.id,
+        deliveryId,
+        bookId: R.book?.bookId || '',
+        bookTitle: R.manifest?.title || R.book?.title || '',
+        chapterTitle: annotation.chapterTitle || '',
+        quote: annotation.quote || '',
+        context: annotation.context || annotation.quote || '',
+        note: String(note || '').trim(),
+      },
+    }, location.origin);
+  });
+}
+
+function commitCallDelivery(requestId) {
+  window.parent.postMessage({ type: 'guichao-books:call-committed', requestId }, location.origin);
+}
+
+window.addEventListener('message', (event) => {
+  if (!HOME_HOSTED || event.origin !== location.origin || event.source !== window.parent) return;
+  if (event.data?.type === 'guichao-books:call-status') {
+    const requestId = String(event.data.requestId || '');
+    const finish = callStatusWaiters.get(requestId);
+    if (!finish) return;
+    callStatusWaiters.delete(requestId);
+    finish(event.data.connected === true);
+    return;
+  }
+  if (event.data?.type === 'guichao-books:call-accepted') {
+    const requestId = String(event.data.requestId || '');
+    const waiter = callDeliveryWaiters.get(requestId);
+    if (!waiter) return;
+    callDeliveryWaiters.delete(requestId);
+    if (event.data.ok !== true) {
+      waiter.reject(new Error('电话没有确认收到'));
+      return;
+    }
+    acceptedCallRequests.add(requestId);
+    waiter.resolve(event.data);
+    return;
+  }
+  if (event.data?.type === 'guichao-books:call-result') {
+    const requestId = String(event.data.requestId || '');
+    if (event.data.ok === true) {
+      acceptedCallRequests.delete(requestId);
+      return;
+    }
+    const waiter = callDeliveryWaiters.get(requestId);
+    if (waiter) {
+      callDeliveryWaiters.delete(requestId);
+      waiter.reject(new Error(event.data.error || '这句没有送到电话里'));
+      return;
+    }
+    if (acceptedCallRequests.delete(requestId)) toast(event.data.error || '共读者接住了这句，但这次没有说完');
+  }
+});
+
+function pointInParagraph(node, offset) {
+  const el = node && (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement);
+  const para = el && el.closest ? el.closest('p[data-i]') : null;
+  if (!para || !rFlow.contains(para)) return null;
+  try {
+    const prefix = document.createRange();
+    prefix.selectNodeContents(para);
+    prefix.setEnd(node, offset);
+    return { paraIdx: Number(para.dataset.i), off: prefix.toString().length };
+  } catch { return null; }
+}
+
+function pendingFromParagraph(paraIdx, startOffset, endOffset) {
+  const ch = R.chapters[R.ch];
+  const text = ch && ch.paragraphs[paraIdx];
+  if (typeof text !== 'string') return null;
+  const startOff = clamp(startOffset, 0, text.length);
+  const endOff = clamp(endOffset, 0, text.length);
+  if (endOff <= startOff) return null;
+  return {
+    chapter: R.ch,
+    chapterTitle: ch.title || '',
+    paraIdx,
+    startOff,
+    endOff,
+    quote: text.slice(startOff, endOff),
+    context: text,
+    clientId: makeSelectionClientId(),
+  };
+}
+
+function pendingFromNativeSelection() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
+  const range = selection.getRangeAt(0);
+  const start = pointInParagraph(range.startContainer, range.startOffset);
+  const end = pointInParagraph(range.endContainer, range.endOffset);
+  if (!start || !end) return null;
+  if (start.paraIdx !== end.paraIdx) return { error: 'cross-paragraph' };
+  return pendingFromParagraph(start.paraIdx, start.off, end.off);
+}
+
+function activeSelectionRange() {
+  if (PaintSelect.range) return PaintSelect.range;
+  const selection = window.getSelection?.();
+  return selection?.rangeCount && !selection.isCollapsed ? selection.getRangeAt(0) : null;
+}
+
+  function positionSelectionTools() {
+    const toolbar = document.getElementById('selection-tools');
+    const range = activeSelectionRange();
+    if (!toolbar || !range) return;
+    const viewport = window.visualViewport;
+    const safeArea = window.openai?.safeArea;
+    const safeTop = Number(safeArea?.insets?.top ?? safeArea?.top) || 0;
+    const safeBottom = Number(safeArea?.insets?.bottom ?? safeArea?.bottom) || 0;
+    const top = Math.max(viewport?.offsetTop || 0, safeTop) + 8;
+    const bottom = Math.min(window.innerHeight - safeBottom,
+      (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight)) - 8;
+    const left = (viewport?.offsetLeft || 0) + 8;
+    const right = left + (viewport?.width || window.innerWidth) - 16;
+    const rects = Array.from(range.getClientRects())
+      .filter(rect => rect.width > 0 && rect.height > 0 && rect.bottom > top && rect.top < bottom && rect.right > left && rect.left < right);
+    if (!rects.length) return;
+    const first = rects[0];
+    const last = rects[rects.length - 1];
+    const height = toolbar.offsetHeight;
+    const width = toolbar.offsetWidth;
+    const above = first.top - height - 12;
+    const below = last.bottom + 12;
+    const preferBelow = (first.top + last.bottom) / 2 >= (top + bottom) / 2;
+    const belowFits = below + height <= bottom;
+    const y = preferBelow && belowFits ? below : above >= top ? above : belowFits ? below : top;
+    const x = Math.max(left + width / 2, Math.min(right - width / 2, (first.left + first.right) / 2));
+    toolbar.style.setProperty('--books-selection-top', Math.round(Math.min(y, Math.max(top, bottom - height))) + 'px');
+    toolbar.style.setProperty('--books-selection-left', Math.round(x) + 'px');
+  }
+  window.addEventListener('resize', positionSelectionTools, { passive: true });
+  window.visualViewport?.addEventListener('resize', positionSelectionTools, { passive: true });
+  window.visualViewport?.addEventListener('scroll', positionSelectionTools, { passive: true });
+
+
+function hideSelectionTools() { selectionTools.classList.remove('show'); }
+
+function clearNativeSelection({ keepPending = false } = {}) {
+  hideSelectionTools();
+  const selection = window.getSelection();
+  if (selection) selection.removeAllRanges();
+  showPaint(null);
+  if (!keepPending) R.pendingSel = null;
+}
+
+let selectionSyncTimer = null;
+function syncNativeSelection() {
+  clearTimeout(selectionSyncTimer);
+  if (PaintSelect.active || PaintSelect.range) return;
+  selectionSyncTimer = setTimeout(() => {
+    if (!reader.classList.contains('open') || document.querySelector('.sheet.open')) { hideSelectionTools(); return; }
+    const pending = pendingFromNativeSelection();
+    if (!pending) { hideSelectionTools(); return; }
+    if (pending.error === 'cross-paragraph') {
+      hideSelectionTools();
+      toast('一次先选同一段里的话');
+      return;
+    }
+    R.pendingSel = pending;
+    R.suppressReaderClickUntil = Date.now() + 600;
+    positionSelectionTools();
+    selectionTools.classList.add('show');
+  }, 120);
+}
+
+document.addEventListener('selectionchange', syncNativeSelection);
+// Desktop browsers can finish updating the native range after selectionchange.
+// Re-read it once the mouse or pointer is released so the Books action bar is
+// never left behind a stale/collapsed intermediate selection.
+function syncNativeSelectionAfterPointer() {
+  window.setTimeout(syncNativeSelection, 0);
+}
+rViewport.addEventListener('pointerup', syncNativeSelectionAfterPointer);
+rViewport.addEventListener('mouseup', syncNativeSelectionAfterPointer);
+rViewport.addEventListener('keyup', syncNativeSelectionAfterPointer);
+
+/* ── 荧光笔：长按开始涂，手指划过的字涂成粉色，松手后操作条出现在上方 ── */
+
+const PAINT_HOLD_MS = 380;
+const PAINT_MOVE_SLOP = 8;
+
+function caretPointAt(x, y) {
+  const range = document.caretRangeFromPoint?.(x, y);
+  if (range) return pointInParagraph(range.startContainer, range.startOffset);
+  const position = document.caretPositionFromPoint?.(x, y);
+  return position ? pointInParagraph(position.offsetNode, position.offset) : null;
+}
+
+function domPointInParagraph(para, off) {
+  const walker = document.createTreeWalker(para, NodeFilter.SHOW_TEXT);
+  let left = off;
+  let last = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    last = node;
+    if (left <= node.data.length) return [node, left];
+    left -= node.data.length;
+  }
+  return last ? [last, last.data.length] : [para, 0];
+}
+
+function showPaint(range) {
+  PaintSelect.range = range;
+  if (!PaintSelect.enabled) return;
+  if (range) CSS.highlights.set('books-paint', new Highlight(range));
+  else CSS.highlights.delete('books-paint');
+}
+
+function paintedOffsets() {
+  const start = Math.min(PaintSelect.anchorOff, PaintSelect.focusOff);
+  const end = Math.max(PaintSelect.anchorOff, PaintSelect.focusOff);
+  // 起点那个字总是涂上，手指往回划也不会变成空选。
+  return PaintSelect.focusOff >= PaintSelect.anchorOff ? [start, Math.max(end, start + 1)] : [start, PaintSelect.anchorOff + 1];
+}
+
+function renderPaint() {
+  const para = rFlow.querySelector(`p[data-i="${PaintSelect.paraIdx}"]`);
+  const text = R.chapters[R.ch]?.paragraphs[PaintSelect.paraIdx];
+  if (!para || typeof text !== 'string') return;
+  const [start, end] = paintedOffsets().map((off) => clamp(off, 0, text.length));
+  const range = document.createRange();
+  range.setStart(...domPointInParagraph(para, start));
+  range.setEnd(...domPointInParagraph(para, end));
+  showPaint(range);
+}
+
+function movePaintFocus(x, y) {
+  const point = caretPointAt(x, y);
+  if (!point) return;
+  const text = R.chapters[R.ch]?.paragraphs[PaintSelect.paraIdx] || '';
+  // 一次只涂同一段：手指出了这一段，就停在段首或段尾。
+  if (point.paraIdx === PaintSelect.paraIdx) PaintSelect.focusOff = point.off;
+  else PaintSelect.focusOff = point.paraIdx < PaintSelect.paraIdx ? 0 : text.length;
+  renderPaint();
+}
+
+function cancelPaintHold() {
+  clearTimeout(PaintSelect.timer);
+  PaintSelect.timer = 0;
+}
+
+function finishPaint() {
+  cancelPaintHold();
+  if (!PaintSelect.active) return;
+  PaintSelect.active = false;
+  const [start, end] = paintedOffsets();
+  const pending = pendingFromParagraph(PaintSelect.paraIdx, start, end);
+  if (!pending) { clearNativeSelection(); return; }
+  R.pendingSel = pending;
+  R.suppressReaderClickUntil = Date.now() + 600;
+  positionSelectionTools();
+  selectionTools.classList.add('show');
+}
+
+if (PaintSelect.enabled) {
+  rViewport.addEventListener('touchstart', (event) => {
+    cancelPaintHold();
+    if (event.touches.length !== 1 || document.querySelector('.sheet.open')) return;
+    const touch = event.touches[0];
+    PaintSelect.startX = touch.clientX;
+    PaintSelect.startY = touch.clientY;
+    PaintSelect.timer = setTimeout(() => {
+      PaintSelect.timer = 0;
+      const point = caretPointAt(PaintSelect.startX, PaintSelect.startY);
+      if (!point) return;
+      clearNativeSelection();
+      PaintSelect.active = true;
+      PaintSelect.paraIdx = point.paraIdx;
+      PaintSelect.anchorOff = PaintSelect.focusOff = point.off;
+      ReaderGesture.cancelled = true;
+      renderPaint();
+    }, PAINT_HOLD_MS);
+  }, { passive: true });
+
+  rViewport.addEventListener('touchmove', (event) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    if (PaintSelect.timer && Math.hypot(touch.clientX - PaintSelect.startX, touch.clientY - PaintSelect.startY) > PAINT_MOVE_SLOP) cancelPaintHold();
+    if (!PaintSelect.active) return;
+    event.preventDefault();
+    movePaintFocus(touch.clientX, touch.clientY);
+  }, { passive: false });
+
+  rViewport.addEventListener('touchend', finishPaint, { passive: true });
+  rViewport.addEventListener('touchcancel', finishPaint, { passive: true });
+}
+
+async function savePendingSelection(comment = '') {
+  if (!R.pendingSel || R.selectionBusy) return null;
+  R.selectionBusy = true;
+  const payload = { ...R.pendingSel };
+  clearNativeSelection({ keepPending: true });
+  try {
+    const routeToCall = await activeHomeCall();
+    const { annotation, duplicateSelection } = await apiPost('/annotations', {
+      bookId: R.book.bookId,
+      author: 'human',
+      comment,
+      delivery: routeToCall ? 'call' : 'home',
+      ...payload,
+    });
+    if (duplicateSelection) {
+      await refreshAnnos({ rerender: true });
+      R.pendingSel = null;
+      return { annotation, duplicateSelection: true };
+    }
+    let deliveredToCall = false;
+    if (routeToCall) {
+      let accepted = null;
+      try {
+        accepted = await sendSelectionToCall(annotation, comment, annotation.id);
+        await apiPost(`/annotations/${R.book.bookId}/${annotation.id}/delivery`, {
+          deliveryId: annotation.id,
+          status: 'accepted',
+        });
+        commitCallDelivery(accepted.requestId);
+        deliveredToCall = true;
+      } catch (error) {
+        if (accepted?.requestId) acceptedCallRequests.delete(accepted.requestId);
+        await apiPost(`/annotations/${R.book.bookId}/${annotation.id}/deliver`, { deliveryId: annotation.id });
+      }
+    }
+    await refreshAnnos({ rerender: true });
+    toast(deliveredToCall ? '这一句送进电话了' : '这一句已保存');
+    R.pendingSel = null;
+    return { annotation, duplicateSelection: false };
+  } finally {
+    R.selectionBusy = false;
+  }
+}
+
+document.getElementById('selection-share').addEventListener('click', async () => {
+  try {
+    const saved = await savePendingSelection('');
+    if (saved) openSheet('detail', saved.annotation, { jump: false });
+  } catch (e) { toast('保存失败：' + e.message); }
+});
+function existingPendingSelection() {
+  const pending = R.pendingSel;
+  const chapter = pending && R.chapters[pending.chapter];
+  if (!chapter || !Number.isInteger(chapter.baseSeq)) return null;
+  const seq = chapter.baseSeq + pending.paraIdx;
+  return R.annos.find((item) => item.createdBy === 'human' && item.seq === seq
+    && item.startOff === pending.startOff && item.endOff === pending.endOff) || null;
+}
+document.getElementById('selection-write').addEventListener('click', () => {
+  if (!R.pendingSel) return;
+  const existing = existingPendingSelection();
+  if (existing) {
+    clearNativeSelection();
+    openSheet('detail', existing, { jump: false });
+    return;
+  }
+  clearNativeSelection({ keepPending: true });
+  openSheet('create', null, {});
+});
+
+/* ── 横滑翻页：快速横移接管，长按选字优先 ── */
+
+rViewport.addEventListener('touchstart', (event) => {
+  if (settings.pageMode !== 'swipe') return;
+  if (event.touches.length !== 1 || selectionTools.classList.contains('show')) return;
+  const touch = event.touches[0];
+  if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
+  ReaderGesture.active = true; ReaderGesture.horizontal = false; ReaderGesture.cancelled = false;
+  ReaderGesture.startX = ReaderGesture.lastX = touch.clientX;
+  ReaderGesture.startY = touch.clientY; ReaderGesture.startedAt = performance.now();
+}, { passive: true });
+
+rViewport.addEventListener('touchmove', (event) => {
+  if (!ReaderGesture.active || event.touches.length !== 1) return;
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed) { ReaderGesture.cancelled = true; return; }
+  const touch = event.touches[0];
+  const dx = touch.clientX - ReaderGesture.startX;
+  const dy = touch.clientY - ReaderGesture.startY;
+  ReaderGesture.lastX = touch.clientX;
+  if (!ReaderGesture.horizontal && Math.abs(dx) > 12) {
+    ReaderGesture.horizontal = Math.abs(dx) > Math.abs(dy) * 1.2 && performance.now() - ReaderGesture.startedAt < 420;
+    if (!ReaderGesture.horizontal && Math.abs(dy) > 12) ReaderGesture.cancelled = true;
+  }
+  if (!ReaderGesture.horizontal || ReaderGesture.cancelled) return;
+  event.preventDefault();
+  R.suppressReaderClickUntil = Date.now() + 500;
+  rFlow.classList.add('no-transition');
+  const atStart = R.page === 0 && R.ch === 0 && dx > 0;
+  const atEnd = R.page === R.pages - 1 && R.ch === R.manifest.chapterCount - 1 && dx < 0;
+  const drag = (atStart || atEnd) ? dx * .26 : dx;
+  rFlow.style.transform = `translateX(${(-R.page * R.step) + drag}px)`;
+}, { passive: false });
+
+async function finishReaderGesture() {
+  if (!ReaderGesture.active) return;
+  const dx = ReaderGesture.lastX - ReaderGesture.startX;
+  const elapsed = Math.max(1, performance.now() - ReaderGesture.startedAt);
+  const velocity = Math.abs(dx) / elapsed;
+  const wasHorizontal = ReaderGesture.horizontal;
+  const wasCancelled = ReaderGesture.cancelled;
+  const shouldTurn = wasHorizontal && !wasCancelled && (Math.abs(dx) > Math.max(42, window.innerWidth * .14) || (Math.abs(dx) > 18 && velocity > .45));
+  ReaderGesture.active = false;
+  if (!wasHorizontal) return;
+  rFlow.classList.remove('no-transition');
+  if (wasCancelled) { gotoPage(R.page, { silentIfSame: false }); return; }
+  if (shouldTurn) await turnPage(dx < 0 ? 1 : -1);
+  else gotoPage(R.page, { silentIfSame: false });
+}
+
+rViewport.addEventListener('touchend', finishReaderGesture, { passive: true });
+rViewport.addEventListener('touchcancel', finishReaderGesture, { passive: true });
+
+/* ── 底部弹窗 ── */
+
+function replyPartnerLabel() {
+  return People.companion.name;
+}
+
+function replyFeedbackFor(anno) {
+  if (R.replyDelivery?.annotationId === anno.id) return R.replyDelivery;
+  const comments = Array.isArray(anno.comments) ? anno.comments : [];
+  let lastHuman = -1;
+  comments.forEach((comment, index) => {
+    if (comment.author === 'human') lastHuman = index;
+  });
+  if (lastHuman < 0) return null;
+  const laterAi = comments.slice(lastHuman + 1).filter((comment) => comment.author === 'ai');
+  if (laterAi.some((comment) => comment.final !== false)) return null;
+  if (laterAi.some((comment) => comment.final === false)) {
+    return { status: 'replying', text: `${replyPartnerLabel()}在回你` };
+  }
+  const human = comments[lastHuman];
+  if (human?.delivery?.status === 'failed') {
+    return { status: 'failed', text: '这次没送到', comment: human };
+  }
+  return null;
+}
+
+function replyFeedbackHtml(feedback) {
+  if (!feedback) return '';
+  if (feedback.status === 'sending') {
+    return `<div class="reply-feedback to-companion"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>${esc(feedback.text)}</span></div>`;
+  }
+  if (feedback.status === 'replying') {
+    return `<div class="reply-feedback from-companion"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>${esc(feedback.text)}</span></div>`;
+  }
+  if (feedback.status === 'failed') {
+    return `<div class="reply-feedback to-companion"><span>${esc(feedback.text)}</span><button class="reply-retry" type="button" data-retry-reply>再试一次</button></div>`;
+  }
+  return '';
+}
+
+function renderComments(anno) {
+  const group = selectionGroup(anno);
+  if (!group.some((item) => item.id === anno.id)) group.push(anno);
+  const entries = group.map((item) => ({ item, creator: personFor(item), root: annotationRoot(item) }));
+  const rootsHtml = entries.map(({ creator, root }) => {
+    const creatorSide = creator === People.human ? 'human' : 'companion';
+    return root.text ? `<article class="annotation-block">
+      ${avatarHtml(creator, creatorSide)}
+      <div class="annotation-body">
+        <div class="annotation-meta"><strong class="${personNameClass(creator)}">${esc(creator.name)}</strong><span>${fmtThreadTime(root.at)}</span><span class="annotation-kind">批注</span></div>
+        <div class="annotation-text">${esc(root.text)}</div>
+      </div>
+    </article>` : `<div class="anno-root-empty">划线 · ${fmtThreadTime(root.at)}</div>`;
+  }).join('');
+  const replies = entries.flatMap(({ root }) => root.replies).sort((a, b) =>
+    String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  const repliesHtml = replies.map((comment) => {
+    const person = personFor(comment);
+    const fromHuman = person === People.human;
+    const meta = fromHuman
+      ? `<div class="reply-meta"><span>${fmtThreadTime(comment.createdAt)}</span><strong>${esc(person.name)}</strong></div>`
+      : `<div class="reply-meta"><strong>${esc(person.name)}</strong><span>${fmtThreadTime(comment.createdAt)}</span></div>`;
+    const content = `<div class="reply-content">${meta}<div class="reply-bubble">${esc(comment.text)}</div></div>`;
+    return fromHuman
+      ? `<article class="reply-row from-human">${content}</article>`
+      : `<article class="reply-row from-companion">${content}</article>`;
+  }).join('');
+  const feedback = R.detailAnno ? replyFeedbackHtml(replyFeedbackFor(R.detailAnno)) : '';
+  document.getElementById('sheet-comments').innerHTML = `<div class="selection-annotations">${rootsHtml}</div><div class="reply-thread">${repliesHtml}${feedback}</div>`;
+}
+
+let detailPollGeneration = 0;
+function stopDetailPolling() {
+  detailPollGeneration += 1;
+  if (R.detailPollTimer) clearTimeout(R.detailPollTimer);
+  R.detailPollTimer = null;
+  R.detailPollUntil = 0;
+}
+
+function startDetailPolling() {
+  stopDetailPolling();
+  if (!R.detailAnno || !R.book) return;
+  const generation = detailPollGeneration;
+  const bookId = R.book.bookId;
+  const annotationId = R.detailAnno.id;
+  R.detailPollUntil = Date.now() + 10 * 60 * 1000;
+  const poll = async () => {
+    if (generation !== detailPollGeneration) return;
+    if (!R.detailAnno || R.detailAnno.id !== annotationId || R.book?.bookId !== bookId || !sheet.classList.contains('open')) return stopDetailPolling();
+    if (Date.now() > R.detailPollUntil) {
+      R.replyDelivery = null;
+      renderComments(R.detailAnno);
+      return stopDetailPolling();
+    }
+    try {
+      const { annotations } = await apiGet('/annotations/' + bookId);
+      if (generation !== detailPollGeneration || R.detailAnno?.id !== annotationId || R.book?.bookId !== bookId) return;
+      const previous = JSON.stringify(selectionGroup(R.detailAnno));
+      R.annos = annotations;
+      const fresh = annotations.find((a) => a.id === annotationId);
+      if (fresh) {
+        R.detailAnno = fresh;
+        if (JSON.stringify(selectionGroup(fresh)) !== previous) renderComments(fresh);
+      }
+    } catch {}
+    if (generation !== detailPollGeneration) return;
+    const remainingMs = R.detailPollUntil - Date.now();
+    R.detailPollTimer = setTimeout(poll, remainingMs > 8 * 60 * 1000 ? 2000 : 10000);
+  };
+  R.detailPollTimer = setTimeout(poll, 1200);
+}
+
+function resizeAnnotationInput() {
+  const input = document.getElementById('sheet-text');
+  const minimum = R.sheetMode === 'create' ? 116 : 44;
+  const maximum = Math.max(44, Math.min(240, window.innerHeight * .32));
+  input.style.height = 'auto';
+  input.style.height = Math.min(maximum, Math.max(minimum, input.scrollHeight)) + 'px';
+}
+document.getElementById('sheet-text').addEventListener('input', resizeAnnotationInput);
+
+function openSheet(mode, anno, { jump = false } = {}) {
+  stopDetailPolling();
+  R.sheetMode = mode;
+  R.detailAnno = anno;
+  sheet.dataset.mode = mode;
+  const quoteWrap = document.getElementById('sheet-quote-wrap');
+  const quoteEl = document.getElementById('sheet-quote');
+  const jumpEl = document.getElementById('sheet-jump');
+  const textEl = document.getElementById('sheet-text');
+  quoteWrap.classList.toggle('by-ai', mode === 'detail' && anno?.createdBy === 'ai');
+  if (mode === 'create') {
+    quoteEl.textContent = R.pendingSel.quote;
+    document.getElementById('sheet-comments').innerHTML = '';
+    textEl.placeholder = '写批注…';
+    document.getElementById('sheet-send').setAttribute('aria-label', '保存批注');
+  } else {
+    quoteEl.textContent = anno.quote;
+    renderComments(anno);
+    textEl.placeholder = '回复…';
+    document.getElementById('sheet-send').setAttribute('aria-label', '发送回复');
+  }
+  quoteWrap.classList.toggle('can-jump', jump);
+  jumpEl.style.display = jump ? '' : 'none';
+  textEl.value = '';
+  sheetMask.classList.add('open');
+  sheet.classList.add('open');
+  resizeAnnotationInput();
+  if (mode === 'detail') startDetailPolling();
+}
+
+function openSheetEl(el) {
+  sheetMask.classList.add('open');
+  el.classList.add('open');
+}
+
+function closeSheet() {
+  stopDetailPolling();
+  sheetMask.classList.remove('open');
+  document.querySelectorAll('.sheet').forEach((s) => s.classList.remove('open'));
+  R.sheetMode = null;
+  R.detailAnno = null;
+  R.replyDelivery = null;
+  delete sheet.dataset.mode;
+}
+
+sheetMask.addEventListener('click', closeSheet);
+
+function mergeDetailComment(comment) {
+  if (!R.detailAnno || !comment) return;
+  if (!Array.isArray(R.detailAnno.comments)) R.detailAnno.comments = [];
+  const index = R.detailAnno.comments.findIndex((item) => item.id === comment.id || (comment.clientId && item.clientId === comment.clientId));
+  if (index >= 0) R.detailAnno.comments[index] = comment;
+  else R.detailAnno.comments.push(comment);
+}
+
+async function submitThreadReply({ text, clientId, retryDelivery = false, clearInput = false }) {
+  if (!R.detailAnno || !text || !clientId) return;
+  stopDetailPolling();
+  const activeAnnotationId = R.detailAnno.id;
+  const sendButton = document.getElementById('sheet-send');
+  R.replyDelivery = {
+    annotationId: R.detailAnno.id,
+    status: 'sending',
+    text: `正在送给${replyPartnerLabel()}`,
+    comment: { text, clientId },
+  };
+  renderComments(R.detailAnno);
+  sendButton.disabled = true;
+  try {
+    const annotation = R.detailAnno;
+    const routeToCall = !retryDelivery && await activeHomeCall();
+    let result = await apiPost(`/annotations/${R.book.bookId}/${annotation.id}/comment`, {
+      author: 'human', text, clientId, retryDelivery, delivery: routeToCall ? 'call' : 'home',
+    });
+    if (routeToCall) {
+      let accepted = null;
+      try {
+        accepted = await sendSelectionToCall(annotation, text, result.comment.id);
+        result = await apiPost(`/annotations/${R.book.bookId}/${annotation.id}/delivery`, {
+          deliveryId: result.comment.id,
+          commentId: result.comment.id,
+          status: 'accepted',
+        });
+        commitCallDelivery(accepted.requestId);
+      } catch (error) {
+        if (accepted?.requestId) acceptedCallRequests.delete(accepted.requestId);
+        result = await apiPost(`/annotations/${R.book.bookId}/${annotation.id}/comment`, {
+          author: 'human', text, clientId, retryDelivery: true, delivery: 'home',
+        });
+      }
+    }
+    mergeDetailComment(result.comment);
+    R.replyDelivery = null;
+    renderComments(R.detailAnno);
+    if (clearInput) { document.getElementById('sheet-text').value = ''; resizeAnnotationInput(); }
+    await refreshAnnos({ rerender: reader.classList.contains('open') });
+  } catch (error) {
+    R.replyDelivery = {
+      annotationId: R.detailAnno.id,
+      status: 'failed',
+      text: '这次没送到',
+      comment: { text, clientId },
+    };
+    renderComments(R.detailAnno);
+    toast('这次没送到，再试一次');
+  } finally {
+    sendButton.disabled = false;
+    if (R.detailAnno?.id === activeAnnotationId && sheet.classList.contains('open')) startDetailPolling();
+  }
+}
+
+const sheetSendButton = document.getElementById('sheet-send');
+// 键盘开着时，输入框失焦会让批注板跟着键盘下滑，按钮从手指下移开；按下发送时保持焦点，一次就能发出。
+sheetSendButton.addEventListener('mousedown', (event) => event.preventDefault());
+sheetSendButton.addEventListener('touchend', (event) => {
+  const touch = event.changedTouches[0];
+  const rect = sheetSendButton.getBoundingClientRect();
+  if (!touch || touch.clientX < rect.left || touch.clientX > rect.right || touch.clientY < rect.top || touch.clientY > rect.bottom) return;
+  event.preventDefault();
+  if (!sheetSendButton.disabled) sendSheet();
+});
+sheetSendButton.addEventListener('click', () => sendSheet());
+
+async function sendSheet() {
+  const textEl = document.getElementById('sheet-text');
+  const text = textEl.value.trim();
+  if (R.sheetMode !== 'create' && !text) return;
+  try {
+    if (R.sheetMode === 'create') {
+      const saved = await savePendingSelection(text);
+      if (saved) {
+        openSheet('detail', saved.annotation, { jump: false });
+        if (saved.duplicateSelection && text) {
+          const clientId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+            ? `reading-comment-${globalThis.crypto.randomUUID()}`
+            : `reading-comment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          await submitThreadReply({ text, clientId, clearInput: true });
+        }
+      }
+    } else if (R.detailAnno) {
+      const clientId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+        ? `reading-comment-${globalThis.crypto.randomUUID()}`
+        : `reading-comment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await submitThreadReply({ text, clientId, clearInput: true });
+    }
+  } catch (e) {
+    toast('保存失败：' + e.message);
+  }
+}
+
+document.getElementById('sheet-comments').addEventListener('click', async (event) => {
+  if (!event.target.closest('[data-retry-reply]') || !R.detailAnno) return;
+  const local = R.replyDelivery?.status === 'failed' ? R.replyDelivery.comment : null;
+  const persisted = (Array.isArray(R.detailAnno.comments) ? R.detailAnno.comments : [])
+    .slice().reverse().find((comment) => comment.author === 'human' && comment.delivery?.status === 'failed');
+  const target = local || persisted;
+  if (!target?.text || !target?.clientId) return;
+  await submitThreadReply({ text: target.text, clientId: target.clientId, retryDelivery: true });
+});
+
+document.getElementById('sheet-jump').addEventListener('click', async () => {
+  const anno = R.detailAnno;
+  if (!anno || !R.manifest) return;
+  closeSheet();
+  let chIdx = 0;
+  for (const ch of R.manifest.chapters) {
+    if (ch.baseSeq <= anno.seq) chIdx = ch.idx;
+    else break;
+  }
+  await enterReader(chIdx, anno.seq);
+  const seg = rFlow.querySelector(`.seg[data-ids*="${anno.id}"]`);
+  if (seg) { seg.classList.add('flash'); setTimeout(() => seg.classList.remove('flash'), 1700); }
+});
+
+async function refreshAnnos({ rerender = false } = {}) {
+  try {
+    const { annotations } = await apiGet('/annotations/' + R.book.bookId);
+    R.annos = annotations;
+    if (rerender && reader.classList.contains('open')) {
+      const keep = R.page;
+      rFlow.classList.add('no-transition');
+      renderChapterHtml(R.chapters[R.ch]);
+      paginate();
+      gotoPage(keep, { silentIfSame: false });
+      requestAnimationFrame(() => rFlow.classList.remove('no-transition'));
+    }
+  } catch {}
+}
+
+function relayout() {
+  if (!reader.classList.contains('open') || !R.chapters[R.ch]) return;
+  clearNativeSelection();
+  const range = currentParaRange();
+  rFlow.classList.add('no-transition');
+  renderChapterHtml(R.chapters[R.ch]);
+  paginate();
+  let page = 0;
+  if (range) {
+    const paraIdx = range.seqStart - R.chapters[R.ch].baseSeq;
+    page = R.paraPages[paraIdx] ? R.paraPages[paraIdx].start : 0;
+  }
+  gotoPage(page, { silentIfSame: false });
+  requestAnimationFrame(() => rFlow.classList.remove('no-transition'));
+}
+
+window.addEventListener('resize', relayout);
+
+/* ── 工具条：目录 / 设置 ── */
+
+function openTocSheet() {
+  const list = document.getElementById('toc-list');
+  list.innerHTML = R.manifest.chapters.map((ch) =>
+    `<div class="toc-item${ch.idx === R.ch ? ' cur' : ''}" data-ch="${ch.idx}"><span>${esc(ch.title)}</span><span class="toc-chars">${ch.chars}字</span></div>`
+  ).join('');
+  openSheetEl(document.getElementById('sheet-toc'));
+  const cur = list.querySelector('.cur');
+  if (cur) cur.scrollIntoView({ block: 'center' });
+}
+
+document.getElementById('toc-list').addEventListener('click', async (e) => {
+  const item = e.target.closest('.toc-item');
+  if (!item) return;
+  closeSheet();
+  await showChapter(Number(item.dataset.ch), null);
+});
+
+function setTypography(key, value) {
+  settings[key] = key === 'fontSize'
+    ? clamp(Math.round(Number(value)), 15, 22)
+    : clamp(Math.round(Number(value) * 10) / 10, 1.6, 2.4);
+  saveSettings();
+  applyTypography();
+  relayout();
+}
+
+document.getElementById('typography-controls').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-setting]');
+  if (!button) return;
+  const key = button.dataset.setting;
+  setTypography(key, Number(settings[key]) + Number(button.dataset.delta));
+});
+
+document.getElementById('theme-seg').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  settings.theme = b.dataset.t;
+  saveSettings();
+  applyTheme();
+});
+
+document.getElementById('page-mode').addEventListener('click', (event) => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  settings.pageMode = button.dataset.mode;
+  saveSettings();
+  applyPageMode();
+});
+
+document.getElementById('settings-close').addEventListener('click', closeSheet);
+
+function openSetSheet() {
+  applyTheme();
+  applyTypography();
+  applyPageMode();
+  openSheetEl(document.getElementById('sheet-set'));
+}
+
+async function boot() {
+  applyTheme();
+  if (HOME_HOSTED && window.parent !== window) window.parent.postMessage({ type: 'guichao-books:view', view: 'shelf' }, location.origin);
+  applyTypography();
+  applyPageMode();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistration('/reading/').then((registration) => registration?.update()).catch(() => {});
+  }
+  shelfEl.classList.remove('loading-hidden');
+  await loadShelf();
+  const params = new URLSearchParams(location.search);
+  const open = params.get('open');
+  if (open && R.books.some(book => book.bookId === open)) {
+    const chapter = Number(params.get('chapter'));
+    const seq = Number(params.get('seq'));
+    if (params.has('seq') && Number.isInteger(chapter) && chapter >= 0 && Number.isInteger(seq) && seq >= 0) {
+      if (await loadBookData(open)) await enterReader(chapter, seq);
+    } else await openBookDirect(open);
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
